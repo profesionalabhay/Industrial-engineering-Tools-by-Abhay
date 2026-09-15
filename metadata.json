@@ -1,0 +1,6 @@
+{
+  "name": "IE COPILOT",
+  "description": "AI-powered Industrial Engineering Workbench",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

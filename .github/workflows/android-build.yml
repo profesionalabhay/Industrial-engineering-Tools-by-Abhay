@@ -39,11 +39,11 @@ jobs:
           fi
 
       - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace
+        run: ./gradlew assembleDebug --stacktrace
 
       - name: Build Release APK
         if: env.HAS_KEYSTORE == 'true'
-        run: gradle assembleRelease --stacktrace
+        run: ./gradlew assembleRelease --stacktrace
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/release.jks
           STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}

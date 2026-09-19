@@ -22,6 +22,9 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Make Gradlew Executable
+        run: chmod +x gradlew
+
       - name: Create .env file
         run: |
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env

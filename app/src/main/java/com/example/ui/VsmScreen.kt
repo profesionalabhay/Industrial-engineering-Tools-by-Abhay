@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,7 +22,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.Station
+import com.example.ui.components.*
+import com.example.ui.theme.*
 import kotlin.math.roundToInt
 
 @Composable
@@ -44,18 +46,26 @@ fun VsmScreen(viewModel: VsmViewModel, modifier: Modifier = Modifier) {
 
     val activeState = scenarios.find { it.id == activeScenarioId }
 
-    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // Top Bar
-        Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(StitchSlate50)
+            .padding(IeSpacing.screenPadding)
+    ) {
+        // Top Bar & State Selector
+        IeCard(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AccountTree, contentDescription = "VSM", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.AccountTree, contentDescription = "VSM", tint = StitchCobalt600)
                     Spacer(Modifier.width(8.dp))
-                    Text("Value Stream Mapping", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Column {
+                        Text("Value Stream Mapping Canvas", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = StitchSlate900)
+                        Text("Material and information flow modeling (Current vs. Future State)", style = MaterialTheme.typography.bodySmall, color = StitchSlate500)
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -63,73 +73,129 @@ fun VsmScreen(viewModel: VsmViewModel, modifier: Modifier = Modifier) {
                     FilterChip(
                         selected = !isFuture,
                         onClick = { viewModel.switchScenario(false) },
-                        label = { Text("Current State") }
+                        label = { Text("Current State", style = IeTypography.badgeText) },
+                        shape = IeRadius.badgeShape,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = StitchCobalt100,
+                            selectedLabelColor = StitchCobalt700
+                        )
                     )
                     FilterChip(
                         selected = isFuture,
                         onClick = { viewModel.switchScenario(true) },
-                        label = { Text("Future State") }
+                        label = { Text("Future State", style = IeTypography.badgeText) },
+                        shape = IeRadius.badgeShape,
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = StitchCobalt100,
+                            selectedLabelColor = StitchCobalt700
+                        )
                     )
-                    
-                    Spacer(Modifier.width(16.dp))
-                    
-                    OutlinedButton(onClick = { /* Export */ }) {
-                        Icon(Icons.Default.FileDownload, contentDescription = "Export")
+
+                    Spacer(Modifier.width(12.dp))
+
+                    OutlinedButton(
+                        onClick = { /* Export */ },
+                        shape = IeRadius.buttonShape,
+                        border = BorderStroke(1.dp, StitchSlate300)
+                    ) {
+                        Icon(Icons.Default.FileDownload, contentDescription = "Export", modifier = Modifier.size(16.dp), tint = StitchSlate700)
                         Spacer(Modifier.width(4.dp))
-                        Text("Export")
+                        Text("Export VSM", color = StitchSlate800)
                     }
                 }
             }
         }
 
-        // Metrics Bar
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
-            Row(modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                VsmMetricItem("Lead Time", String.format("%.1f Days", metrics.totalLeadTimeDays))
-                VsmMetricItem("Process (VA) Time", String.format("%.1f Sec", metrics.totalVaTimeSec))
-                VsmMetricItem("PCE", String.format("%.2f %%", metrics.pce))
-            }
+        Spacer(Modifier.height(10.dp))
+
+        // VSM Metrics Banner (Production Lead Time, Processing Time, PCE)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            IeKpiCard(
+                title = "Total Production Lead Time",
+                value = String.format("%.1f", metrics.totalLeadTimeDays),
+                unit = " days",
+                subtitle = "Sum of inventory queue times",
+                modifier = Modifier.weight(1f)
+            )
+            IeKpiCard(
+                title = "Total Processing (VA) Time",
+                value = String.format("%.1f", metrics.totalVaTimeSec),
+                unit = " s",
+                subtitle = "Value-added work duration",
+                modifier = Modifier.weight(1f)
+            )
+            IeKpiCard(
+                title = "Process Cycle Efficiency (PCE)",
+                value = String.format("%.2f", metrics.pce),
+                unit = "%",
+                trend = "VA / PLT",
+                isPositiveTrend = metrics.pce > 5.0,
+                subtitle = "Industrial benchmark: 5-15%",
+                modifier = Modifier.weight(1f)
+            )
         }
 
-        Row(modifier = Modifier.fillMaxSize()) {
-            // Left Toolbar
-            VsmToolbar(viewModel, modifier = Modifier.width(80.dp).fillMaxHeight())
-            
-            // Canvas Area
-            Box(
+        Spacer(Modifier.height(10.dp))
+
+        // Main Diagram Canvas & Toolbars
+        Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // Left Toolbar (Palette)
+            VsmToolbar(viewModel, modifier = Modifier.width(90.dp).fillMaxHeight().padding(end = 10.dp))
+
+            // Canvas Workspace
+            Card(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxHeight()
-                    .background(Color(0xFFF8F9FA))
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { viewModel.selectNode(null) })
-                    }
+                    .fillMaxHeight(),
+                shape = IeRadius.cardShape,
+                border = BorderStroke(1.dp, StitchSlate200),
+                colors = CardDefaults.cardColors(containerColor = StitchWhite),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
-                activeState?.let { state ->
-                    VsmEdgesCanvas(state.nodes, state.edges)
-                    
-                    state.nodes.forEach { node ->
-                        VsmNodeView(
-                            node = node,
-                            isSelected = node.id == selectedNodeId,
-                            isConnectingTarget = isConnecting && node.id != viewModel.connectingSourceId.value,
-                            onNodeClick = { viewModel.selectNode(node.id) },
-                            onDrag = { dx, dy -> viewModel.moveNode(node.id, dx, dy) }
-                        )
-                    }
-                }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures(onTap = { viewModel.selectNode(null) })
+                        }
+                ) {
+                    activeState?.let { state ->
+                        VsmEdgesCanvas(state.nodes, state.edges)
 
-                if (isConnecting) {
-                    Surface(
-                        modifier = Modifier.align(Alignment.TopCenter).padding(16.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text("Select target node to connect", color = MaterialTheme.colorScheme.onSecondaryContainer)
-                            Spacer(Modifier.width(16.dp))
-                            IconButton(onClick = { viewModel.cancelConnection() }, modifier = Modifier.size(24.dp)) {
-                                Icon(Icons.Default.Close, "Cancel")
+                        state.nodes.forEach { node ->
+                            VsmNodeView(
+                                node = node,
+                                isSelected = node.id == selectedNodeId,
+                                isConnectingTarget = isConnecting && node.id != viewModel.connectingSourceId.value,
+                                onNodeClick = { viewModel.selectNode(node.id) },
+                                onDrag = { dx, dy -> viewModel.moveNode(node.id, dx, dy) }
+                            )
+                        }
+                    }
+
+                    if (isConnecting) {
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(12.dp),
+                            color = StitchCobalt700,
+                            shape = IeRadius.cardShape
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Select destination node to connect flow", color = StitchWhite, style = MaterialTheme.typography.bodyMedium)
+                                Spacer(Modifier.width(12.dp))
+                                IconButton(
+                                    onClick = { viewModel.cancelConnection() },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, "Cancel", tint = StitchWhite)
+                                }
                             }
                         }
                     }
@@ -144,7 +210,10 @@ fun VsmScreen(viewModel: VsmViewModel, modifier: Modifier = Modifier) {
                         node = selectedNode,
                         availableStations = availableStations,
                         viewModel = viewModel,
-                        modifier = Modifier.width(300.dp).fillMaxHeight()
+                        modifier = Modifier
+                            .width(320.dp)
+                            .fillMaxHeight()
+                            .padding(start = 10.dp)
                     )
                 }
             }
@@ -153,26 +222,27 @@ fun VsmScreen(viewModel: VsmViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun VsmMetricItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-    }
-}
-
-@Composable
 fun VsmToolbar(viewModel: VsmViewModel, modifier: Modifier) {
-    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
+    Card(
+        modifier = modifier,
+        shape = IeRadius.cardShape,
+        border = BorderStroke(1.dp, StitchSlate200),
+        colors = CardDefaults.cardColors(containerColor = StitchWhite),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(8.dp).verticalScroll(rememberScrollState()),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(8.dp)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text("Nodes", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Text("PALETTE", style = IeTypography.tableHeader, color = StitchSlate500, modifier = Modifier.padding(top = 4.dp))
             ToolbarItem(Icons.Default.Factory, "Process") { viewModel.addNode(VsmNodeType.PROCESS) }
             ToolbarItem(Icons.Default.ChangeHistory, "Inventory") { viewModel.addNode(VsmNodeType.INVENTORY) }
-            ToolbarItem(Icons.Default.Business, "Supplier/Customer") { viewModel.addNode(VsmNodeType.SUPPLIER) }
-            ToolbarItem(Icons.Default.Dns, "Supermarket") { viewModel.addNode(VsmNodeType.SUPERMARKET) }
+            ToolbarItem(Icons.Default.Business, "Supplier") { viewModel.addNode(VsmNodeType.SUPPLIER) }
+            ToolbarItem(Icons.Default.Dns, "Supermkt") { viewModel.addNode(VsmNodeType.SUPERMARKET) }
             ToolbarItem(Icons.Default.CropPortrait, "Kanban") { viewModel.addNode(VsmNodeType.KANBAN) }
             ToolbarItem(Icons.Default.Computer, "Control") { viewModel.addNode(VsmNodeType.PROD_CONTROL) }
         }
@@ -181,11 +251,29 @@ fun VsmToolbar(viewModel: VsmViewModel, modifier: Modifier) {
 
 @Composable
 fun ToolbarItem(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.clickable(onClick = onClick)) {
-        Surface(shape = RoundedCornerShape(8.dp), color = MaterialTheme.colorScheme.secondaryContainer, modifier = Modifier.size(48.dp)) {
-            Icon(icon, contentDescription = label, modifier = Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.onSecondaryContainer)
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp)
+    ) {
+        Surface(
+            shape = IeRadius.cardShape,
+            color = StitchSlate100,
+            border = BorderStroke(1.dp, StitchSlate200),
+            modifier = Modifier.size(44.dp)
+        ) {
+            Icon(icon, contentDescription = label, modifier = Modifier.padding(10.dp), tint = StitchSlate700)
         }
-        Text(label, style = MaterialTheme.typography.labelSmall, fontSize = 9.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
+        Spacer(Modifier.height(3.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            fontSize = 10.sp,
+            textAlign = TextAlign.Center,
+            color = StitchSlate700
+        )
     }
 }
 
@@ -196,30 +284,29 @@ fun VsmEdgesCanvas(nodes: List<VsmNode>, edges: List<VsmEdge>) {
             val src = nodes.find { it.id == edge.sourceId }
             val tgt = nodes.find { it.id == edge.targetId }
             if (src != null && tgt != null) {
-                val start = Offset(src.x + 60f, src.y + 40f) // Approximate centers
+                val start = Offset(src.x + 60f, src.y + 40f)
                 val end = Offset(tgt.x + 60f, tgt.y + 40f)
-                
+
                 when (edge.type) {
                     VsmEdgeType.MATERIAL -> {
-                        drawLine(color = Color.Black, start = start, end = end, strokeWidth = 3f)
-                        drawArrowHead(start, end, Color.Black)
+                        drawLine(color = StitchSlate800, start = start, end = end, strokeWidth = 3f)
+                        drawArrowHead(start, end, StitchSlate800)
                     }
                     VsmEdgeType.INFORMATION -> {
                         drawLine(
-                            color = Color.Blue, 
-                            start = start, 
-                            end = end, 
-                            strokeWidth = 2f,
-                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 10f), 0f)
+                            color = StitchCobalt600,
+                            start = start,
+                            end = end,
+                            strokeWidth = 2.5f,
+                            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f), 0f)
                         )
-                        drawArrowHead(start, end, Color.Blue)
+                        drawArrowHead(start, end, StitchCobalt600)
                     }
                     VsmEdgeType.FIFO -> {
-                        drawLine(color = Color.DarkGray, start = start, end = end, strokeWidth = 4f)
-                        // Simple cross hatch simulation for FIFO
+                        drawLine(color = StitchSlate600, start = start, end = end, strokeWidth = 4f)
                     }
                     VsmEdgeType.SHIPMENT -> {
-                        drawLine(color = Color.Black, start = start, end = end, strokeWidth = 5f)
+                        drawLine(color = StitchSlate900, start = start, end = end, strokeWidth = 5f)
                     }
                 }
             }
@@ -228,10 +315,9 @@ fun VsmEdgesCanvas(nodes: List<VsmNode>, edges: List<VsmEdge>) {
 }
 
 private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawArrowHead(start: Offset, end: Offset, color: Color) {
-    // Simplified arrowhead
     val path = Path()
     val angle = kotlin.math.atan2((end.y - start.y).toDouble(), (end.x - start.x).toDouble())
-    val arrowSize = 15f
+    val arrowSize = 14f
     val arrowAngle = kotlin.math.PI / 6
 
     val x1 = end.x - arrowSize * kotlin.math.cos(angle - arrowAngle).toFloat()
@@ -267,62 +353,117 @@ fun VsmNodeView(
                 detectTapGestures(onTap = { onNodeClick() })
             }
     ) {
-        val borderColor = if (isSelected) MaterialTheme.colorScheme.primary else if (isConnectingTarget) Color.Green else Color.Black
-        val borderWidth = if (isSelected || isConnectingTarget) 3.dp else 1.dp
+        val borderColor = if (isSelected) StitchCobalt600 else if (isConnectingTarget) StitchVaGreen else StitchSlate300
+        val borderWidth = if (isSelected || isConnectingTarget) 2.dp else 1.dp
 
         when (node.type) {
             VsmNodeType.PROCESS -> {
-                Column(
-                    modifier = Modifier
-                        .width(120.dp)
-                        .background(Color.White)
-                        .border(borderWidth, borderColor)
+                Card(
+                    modifier = Modifier.width(130.dp),
+                    shape = IeRadius.cardShape,
+                    border = BorderStroke(borderWidth, borderColor),
+                    colors = CardDefaults.cardColors(containerColor = StitchWhite),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth().background(Color.LightGray).padding(4.dp)) {
-                        Text(node.name, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
-                    }
-                    HorizontalDivider(color = Color.Black)
-                    Column(modifier = Modifier.padding(4.dp)) {
-                        Text("CT: ${node.cycleTime}s", fontSize = 10.sp)
-                        Text("Up: ${node.uptime}%", fontSize = 10.sp)
-                        Text("Op: ${node.operators}", fontSize = 10.sp)
+                    Column {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(StitchSlate100)
+                                .padding(horizontal = 6.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                node.name,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                textAlign = TextAlign.Center,
+                                color = StitchSlate900,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        HorizontalDivider(color = StitchSlate200)
+                        Column(modifier = Modifier.padding(6.dp)) {
+                            Text("CT: ${node.cycleTime}s", style = IeTypography.dataMono, fontSize = 10.sp, color = StitchSlate800)
+                            Text("VA: ${node.vaTimeSec}s", style = IeTypography.dataMono, fontSize = 10.sp, color = StitchVaGreenText)
+                            Text("Up: ${node.uptime}%", style = IeTypography.dataMono, fontSize = 10.sp, color = StitchSlate600)
+                            Text("Operators: ${node.operators}", style = IeTypography.dataMono, fontSize = 10.sp, color = StitchSlate600)
+                        }
                     }
                 }
             }
             VsmNodeType.INVENTORY -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Default.ChangeHistory, contentDescription = "Inventory", modifier = Modifier.size(48.dp), tint = borderColor)
-                    Text("${node.wip} / ${node.leadTimeDays}d", fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    Icon(
+                        Icons.Default.ChangeHistory,
+                        contentDescription = "Inventory",
+                        modifier = Modifier.size(44.dp),
+                        tint = if (isSelected) StitchCobalt600 else StitchSlate700
+                    )
+                    Text(
+                        "${node.wip.toInt()} pcs | ${node.leadTimeDays}d",
+                        style = IeTypography.dataMonoBold,
+                        fontSize = 10.sp,
+                        color = StitchSlate900
+                    )
                 }
             }
             VsmNodeType.SUPPLIER, VsmNodeType.CUSTOMER -> {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.background(Color.White).border(borderWidth, borderColor).padding(8.dp)
+                Card(
+                    shape = IeRadius.cardShape,
+                    border = BorderStroke(borderWidth, borderColor),
+                    colors = CardDefaults.cardColors(containerColor = StitchWhite)
                 ) {
-                    Icon(Icons.Default.Business, contentDescription = "Factory", tint = Color.DarkGray)
-                    Text(node.name, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(8.dp)
+                    ) {
+                        Icon(Icons.Default.Business, contentDescription = "Entity", tint = StitchSlate700, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.height(2.dp))
+                        Text(node.name, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = StitchSlate900)
+                    }
                 }
             }
             VsmNodeType.PROD_CONTROL -> {
-                Box(
-                    modifier = Modifier.background(Color.White).border(borderWidth, borderColor).padding(16.dp)
+                Card(
+                    shape = IeRadius.cardShape,
+                    border = BorderStroke(borderWidth, borderColor),
+                    colors = CardDefaults.cardColors(containerColor = StitchSlate50)
                 ) {
-                    Text(node.name, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+                    Box(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+                        Text(node.name, fontWeight = FontWeight.Bold, fontSize = 12.sp, textAlign = TextAlign.Center, color = StitchSlate900)
+                    }
                 }
             }
             VsmNodeType.SUPERMARKET -> {
-                Box(
-                    modifier = Modifier.width(60.dp).height(40.dp).border(borderWidth, borderColor).background(Color.White)
+                Card(
+                    shape = IeRadius.cardShape,
+                    border = BorderStroke(borderWidth, borderColor),
+                    colors = CardDefaults.cardColors(containerColor = StitchWhite)
                 ) {
-                    Text("Super\nMarket", fontSize = 10.sp, textAlign = TextAlign.Center, modifier = Modifier.align(Alignment.Center))
+                    Box(
+                        modifier = Modifier
+                            .width(64.dp)
+                            .height(42.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("SUPER\nMARKET", style = IeTypography.tableHeader, fontSize = 9.sp, textAlign = TextAlign.Center, color = StitchSlate800)
+                    }
                 }
             }
             VsmNodeType.KANBAN -> {
-                Box(
-                    modifier = Modifier.width(30.dp).height(40.dp).background(Color.Yellow).border(borderWidth, borderColor)
+                Card(
+                    shape = IeRadius.badgeShape,
+                    border = BorderStroke(borderWidth, borderColor),
+                    colors = CardDefaults.cardColors(containerColor = StitchNnvaAmberLight)
                 ) {
-                    Text("K", fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.Center))
+                    Box(
+                        modifier = Modifier
+                            .width(36.dp)
+                            .height(44.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("K", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = StitchNnvaAmberText)
+                    }
                 }
             }
         }
@@ -336,65 +477,115 @@ fun VsmPropertiesPanel(
     viewModel: VsmViewModel,
     modifier: Modifier
 ) {
-    Surface(modifier = modifier, color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text("Properties", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    Card(
+        modifier = modifier,
+        shape = IeRadius.cardShape,
+        border = BorderStroke(1.dp, StitchSlate200),
+        colors = CardDefaults.cardColors(containerColor = StitchWhite),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(14.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Element Properties", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = StitchSlate900)
                 Row {
-                    IconButton(onClick = { viewModel.duplicateSelectedNode() }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Duplicate")
+                    IconButton(onClick = { viewModel.duplicateSelectedNode() }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Duplicate", tint = StitchSlate600, modifier = Modifier.size(16.dp))
                     }
-                    IconButton(onClick = { viewModel.deleteSelectedNode() }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                    IconButton(onClick = { viewModel.deleteSelectedNode() }, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = StitchNvaRed, modifier = Modifier.size(16.dp))
                     }
                 }
             }
-            Spacer(Modifier.height(16.dp))
 
-            // Connections
-            Text("Connect Node", style = MaterialTheme.typography.labelMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-                Button(onClick = { viewModel.startConnection(VsmEdgeType.MATERIAL) }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(4.dp)) { Text("Material") }
-                Button(onClick = { viewModel.startConnection(VsmEdgeType.INFORMATION) }, modifier = Modifier.weight(1f), contentPadding = PaddingValues(4.dp)) { Text("Info") }
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = StitchSlate200)
+            Spacer(Modifier.height(10.dp))
+
+            Text("CONNECT FLOW", style = IeTypography.tableHeader, color = StitchSlate500)
+            Spacer(Modifier.height(6.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { viewModel.startConnection(VsmEdgeType.MATERIAL) },
+                    modifier = Modifier.weight(1f),
+                    colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
+                    shape = IeRadius.buttonShape
+                ) {
+                    Text("Material", style = MaterialTheme.typography.labelMedium)
+                }
+                OutlinedButton(
+                    onClick = { viewModel.startConnection(VsmEdgeType.INFORMATION) },
+                    modifier = Modifier.weight(1f),
+                    shape = IeRadius.buttonShape,
+                    border = BorderStroke(1.dp, StitchCobalt600)
+                ) {
+                    Text("Info", color = StitchCobalt700, style = MaterialTheme.typography.labelMedium)
+                }
             }
-            
-            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = StitchSlate200)
+            Spacer(Modifier.height(10.dp))
 
             OutlinedTextField(
                 value = node.name,
                 onValueChange = { n -> viewModel.updateSelectedNode { copy(name = n) } },
-                label = { Text("Name") },
-                modifier = Modifier.fillMaxWidth()
+                label = { Text("Node Label") },
+                modifier = Modifier.fillMaxWidth(),
+                textStyle = MaterialTheme.typography.bodyMedium,
+                shape = IeRadius.inputShape
             )
 
             if (node.type == VsmNodeType.PROCESS) {
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(10.dp))
                 var expanded by remember { mutableStateOf(false) }
-                
+
                 Box {
-                    OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (node.linkedStationId != null) "Linked to Station" else "Link to Station data...")
+                    OutlinedButton(
+                        onClick = { expanded = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = IeRadius.buttonShape,
+                        border = BorderStroke(1.dp, StitchSlate300)
+                    ) {
+                        Text(
+                            if (node.linkedStationId != null) "Linked Station Selected" else "Link to Physical Station...",
+                            color = StitchSlate800
+                        )
                     }
                     DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                        DropdownMenuItem(text = { Text("None") }, onClick = { viewModel.linkStationToSelectedNode(null); expanded = false })
+                        DropdownMenuItem(
+                            text = { Text("None (Manual Parameters)") },
+                            onClick = { viewModel.linkStationToSelectedNode(null); expanded = false }
+                        )
                         availableStations.forEach { st ->
-                            DropdownMenuItem(text = { Text(st.name) }, onClick = { viewModel.linkStationToSelectedNode(st.id); expanded = false })
+                            DropdownMenuItem(
+                                text = { Text(st.name) },
+                                onClick = { viewModel.linkStationToSelectedNode(st.id); expanded = false }
+                            )
                         }
                     }
                 }
-                
-                Spacer(Modifier.height(12.dp))
+
+                Spacer(Modifier.height(10.dp))
                 NumberField("Cycle Time (s)", node.cycleTime) { v -> viewModel.updateSelectedNode { copy(cycleTime = v) } }
                 NumberField("VA Time (s)", node.vaTimeSec) { v -> viewModel.updateSelectedNode { copy(vaTimeSec = v) } }
                 NumberField("NNVA Time (s)", node.nnvaTimeSec) { v -> viewModel.updateSelectedNode { copy(nnvaTimeSec = v) } }
                 NumberField("NVA Time (s)", node.nvaTimeSec) { v -> viewModel.updateSelectedNode { copy(nvaTimeSec = v) } }
                 NumberField("Uptime (%)", node.uptime) { v -> viewModel.updateSelectedNode { copy(uptime = v) } }
-                NumberField("Operators", node.operators.toDouble()) { v -> viewModel.updateSelectedNode { copy(operators = v.toInt()) } }
+                NumberField("Assigned Operators", node.operators.toDouble()) { v -> viewModel.updateSelectedNode { copy(operators = v.toInt()) } }
             }
 
             if (node.type == VsmNodeType.INVENTORY) {
-                Spacer(Modifier.height(12.dp))
-                NumberField("WIP (Units)", node.wip) { v -> viewModel.updateSelectedNode { copy(wip = v) } }
+                Spacer(Modifier.height(10.dp))
+                NumberField("WIP Queue (Units)", node.wip) { v -> viewModel.updateSelectedNode { copy(wip = v) } }
                 NumberField("Lead Time (Days)", node.leadTimeDays) { v -> viewModel.updateSelectedNode { copy(leadTimeDays = v) } }
             }
         }
@@ -403,11 +594,19 @@ fun VsmPropertiesPanel(
 
 @Composable
 fun NumberField(label: String, value: Double, onValueChange: (Double) -> Unit) {
+    var text by remember(value) {
+        mutableStateOf(if (value == 0.0) "" else if (value % 1.0 == 0.0) value.toInt().toString() else value.toString())
+    }
     OutlinedTextField(
-        value = if (value == 0.0) "" else value.toString(),
-        onValueChange = { onValueChange(it.toDoubleOrNull() ?: 0.0) },
+        value = text,
+        onValueChange = {
+            text = it
+            it.toDoubleOrNull()?.let { v -> onValueChange(v) }
+        },
         label = { Text(label) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+        modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp),
+        textStyle = IeTypography.dataMono,
+        shape = IeRadius.inputShape
     )
 }

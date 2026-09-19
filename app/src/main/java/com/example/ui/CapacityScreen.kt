@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,7 +16,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.ui.components.*
+import com.example.ui.theme.*
 
 @Composable
 fun CapacityScreen(viewModel: CapacityViewModel, modifier: Modifier = Modifier) {
@@ -24,85 +28,195 @@ fun CapacityScreen(viewModel: CapacityViewModel, modifier: Modifier = Modifier) 
     val params = scenarios.find { it.id == activeScenarioId }
     val metrics by viewModel.metrics.collectAsStateWithLifecycle()
 
-    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
-            Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Assessment, contentDescription = "Capacity", tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(8.dp))
-                Text("Capacity Planning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.weight(1f))
-                
-                // Scenario Toggle
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(StitchSlate50)
+            .padding(IeSpacing.screenPadding)
+    ) {
+        // Top Bar
+        IeCard(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Assessment, contentDescription = "Capacity", tint = StitchCobalt600)
+                    Spacer(Modifier.width(8.dp))
+                    Column {
+                        Text("Capacity & Throughput Planning", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = StitchSlate900)
+                        Text("Takt time calculation, net operating time and capacity gap analysis", style = MaterialTheme.typography.bodySmall, color = StitchSlate500)
+                    }
+                }
+
                 params?.let { scn ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Current", style = MaterialTheme.typography.labelMedium)
+                        Text("Current State", style = MaterialTheme.typography.bodySmall, color = if (!scn.isFuture) StitchSlate900 else StitchSlate500, fontWeight = if (!scn.isFuture) FontWeight.Bold else FontWeight.Normal)
                         Switch(
                             checked = scn.isFuture,
                             onCheckedChange = { viewModel.switchScenario(it) },
-                            modifier = Modifier.padding(horizontal = 8.dp)
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = StitchWhite,
+                                checkedTrackColor = StitchCobalt600,
+                                uncheckedThumbColor = StitchSlate400,
+                                uncheckedTrackColor = StitchSlate200
+                            )
                         )
-                        Text("Future", style = MaterialTheme.typography.labelMedium)
+                        Text("Future State", style = MaterialTheme.typography.bodySmall, color = if (scn.isFuture) StitchSlate900 else StitchSlate500, fontWeight = if (scn.isFuture) FontWeight.Bold else FontWeight.Normal)
                     }
                 }
             }
         }
 
-        Row(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
             // Inputs Column
-            Card(modifier = Modifier.weight(1f).fillMaxHeight(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(modifier = Modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Planning Inputs", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    HorizontalDivider()
-                    
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                shape = IeRadius.cardShape,
+                border = BorderStroke(1.dp, StitchSlate200),
+                colors = CardDefaults.cardColors(containerColor = StitchWhite),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("PLANNING PARAMETERS", style = IeTypography.tableHeader, color = StitchSlate500)
+                    HorizontalDivider(color = StitchSlate200)
+
                     params?.let { p ->
-                        PlanningNumberField("Daily Demand", p.dailyDemand.toDouble()) { v -> viewModel.updateActiveScenario { it.copy(dailyDemand = v.toInt()) } }
-                        PlanningNumberField("Shift Duration (Hours)", p.shiftLengthHours) { v -> viewModel.updateActiveScenario { it.copy(shiftLengthHours = v) } }
-                        PlanningNumberField("Breaks (Minutes)", p.breaksMinutes) { v -> viewModel.updateActiveScenario { it.copy(breaksMinutes = v) } }
-                        PlanningNumberField("Planned Downtime (Minutes)", p.plannedDowntimeMinutes) { v -> viewModel.updateActiveScenario { it.copy(plannedDowntimeMinutes = v) } }
-                        PlanningNumberField("Performance Efficiency (0-1)", p.performanceEfficiency) { v -> viewModel.updateActiveScenario { it.copy(performanceEfficiency = v) } }
-                        PlanningNumberField("Quality Yield (0-1)", p.qualityYield) { v -> viewModel.updateActiveScenario { it.copy(qualityYield = v) } }
-                        PlanningNumberField("Bottleneck CT (sec)", p.bottleneckCtSec) { v -> viewModel.updateActiveScenario { it.copy(bottleneckCtSec = v) } }
+                        PlanningNumberField("Customer Daily Demand", p.dailyDemand.toDouble(), " units") { v -> viewModel.updateActiveScenario { it.copy(dailyDemand = v.toInt()) } }
+                        PlanningNumberField("Gross Shift Duration", p.shiftLengthHours, " hrs") { v -> viewModel.updateActiveScenario { it.copy(shiftLengthHours = v) } }
+                        PlanningNumberField("Scheduled Breaks", p.breaksMinutes, " min") { v -> viewModel.updateActiveScenario { it.copy(breaksMinutes = v) } }
+                        PlanningNumberField("Planned Downtime", p.plannedDowntimeMinutes, " min") { v -> viewModel.updateActiveScenario { it.copy(plannedDowntimeMinutes = v) } }
+                        PlanningNumberField("Performance Efficiency", p.performanceEfficiency, "") { v -> viewModel.updateActiveScenario { it.copy(performanceEfficiency = v) } }
+                        PlanningNumberField("First Pass Yield (Quality)", p.qualityYield, "") { v -> viewModel.updateActiveScenario { it.copy(qualityYield = v) } }
+                        PlanningNumberField("Line Bottleneck Cycle Time", p.bottleneckCtSec, " s") { v -> viewModel.updateActiveScenario { it.copy(bottleneckCtSec = v) } }
                     }
                 }
             }
 
-            // Outputs Column
-            Card(modifier = Modifier.weight(2f).fillMaxHeight(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+            // Outputs & Gap Analysis Column
+            Card(
+                modifier = Modifier
+                    .weight(2f)
+                    .fillMaxHeight(),
+                shape = IeRadius.cardShape,
+                border = BorderStroke(1.dp, StitchSlate200),
+                colors = CardDefaults.cardColors(containerColor = StitchWhite),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
                 metrics?.let { m ->
-                    Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                        Text("Capacity Calculations", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            CapacityMetricCard("Takt Time", String.format("%.1f s", m.taktTimeSec), Modifier.weight(1f))
-                            CapacityMetricCard("UPH", String.format("%.1f /hr", m.uph), Modifier.weight(1f))
-                            CapacityMetricCard("Daily Capacity", String.format("%d units", m.dailyCapacity), Modifier.weight(1f))
+                    Column(
+                        modifier = Modifier
+                            .padding(18.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)
+                    ) {
+                        Text("PRODUCTION RATE & LINE METRICS", style = IeTypography.tableHeader, color = StitchSlate500)
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            IeKpiCard(
+                                title = "Required Takt Time",
+                                value = String.format("%.1f", m.taktTimeSec),
+                                unit = " s",
+                                subtitle = "Pace needed to meet demand",
+                                modifier = Modifier.weight(1f)
+                            )
+                            IeKpiCard(
+                                title = "Throughput (UPH)",
+                                value = String.format("%.1f", m.uph),
+                                unit = " units/hr",
+                                subtitle = "Bottleneck capacity rate",
+                                modifier = Modifier.weight(1f)
+                            )
+                            IeKpiCard(
+                                title = "Daily Capacity",
+                                value = "${m.dailyCapacity}",
+                                unit = " units",
+                                trend = "Output",
+                                isPositiveTrend = m.dailyCapacity >= (params?.dailyDemand ?: 0),
+                                modifier = Modifier.weight(1f)
+                            )
                         }
-                        
-                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            CapacityMetricCard("Available Time", String.format("%.1f hrs", m.availableTimeSec / 3600), Modifier.weight(1f))
-                            CapacityMetricCard("Net Operating Time", String.format("%.1f hrs", m.netOperatingTimeSec / 3600), Modifier.weight(1f))
-                            CapacityMetricCard("Utilization", String.format("%.1f %%", m.utilization), Modifier.weight(1f))
+
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            IeKpiCard(
+                                title = "Gross Operating Time",
+                                value = String.format("%.1f", m.availableTimeSec / 3600),
+                                unit = " hrs",
+                                modifier = Modifier.weight(1f)
+                            )
+                            IeKpiCard(
+                                title = "Net Operating Time",
+                                value = String.format("%.1f", m.netOperatingTimeSec / 3600),
+                                unit = " hrs",
+                                modifier = Modifier.weight(1f)
+                            )
+                            IeKpiCard(
+                                title = "Line Utilization",
+                                value = String.format("%.1f", m.utilization),
+                                unit = "%",
+                                isAlert = m.utilization > 100.0,
+                                modifier = Modifier.weight(1f)
+                            )
                         }
-                        
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                        
-                        val isGap = m.capacityGap < 0 // Negative means shortage in this view model
+
+                        HorizontalDivider(color = StitchSlate200)
+
+                        val isGap = m.capacityGap < 0
                         Card(
-                            colors = CardDefaults.cardColors(containerColor = if (isGap) MaterialTheme.colorScheme.errorContainer else Color(0xFFE8F5E9)),
+                            shape = IeRadius.cardShape,
+                            border = BorderStroke(1.dp, if (isGap) StitchNvaRed.copy(alpha = 0.5f) else StitchVaGreen.copy(alpha = 0.5f)),
+                            colors = CardDefaults.cardColors(containerColor = if (isGap) StitchNvaRedLight else StitchVaGreenLight),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text("Capacity Gap Analysis", fontWeight = FontWeight.Bold, color = if (isGap) MaterialTheme.colorScheme.onErrorContainer else Color(0xFF1B5E20))
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        if (isGap) "CAPACITY DEFICIT DETECTED" else "CAPACITY SUFFICIENT",
+                                        style = IeTypography.tableHeader,
+                                        color = if (isGap) StitchNvaRedText else StitchVaGreenText
+                                    )
+                                    IeBadge(
+                                        text = if (isGap) "OVERTIME NEEDED" else "MEETS TARGET",
+                                        variant = if (isGap) IeBadgeVariant.ERROR else IeBadgeVariant.SUCCESS
+                                    )
+                                }
                                 Spacer(Modifier.height(8.dp))
                                 Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                    Text("Calculated Gap:", style = MaterialTheme.typography.bodyMedium)
-                                    Text(String.format("%+d units", m.capacityGap), fontWeight = FontWeight.Bold)
+                                    Text("Net Output Balance Gap:", style = MaterialTheme.typography.bodyMedium, color = StitchSlate700)
+                                    Text(
+                                        String.format("%+d units / day", m.capacityGap),
+                                        style = IeTypography.dataMonoBold,
+                                        color = if (isGap) StitchNvaRedText else StitchVaGreenText
+                                    )
                                 }
                                 if (isGap) {
                                     Spacer(Modifier.height(4.dp))
                                     Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                                        Text("Overtime Required:", style = MaterialTheme.typography.bodyMedium)
-                                        Text(String.format("%.1f hrs", m.requiredOvertimeHours), fontWeight = FontWeight.Bold)
+                                        Text("Compensating Overtime Required:", style = MaterialTheme.typography.bodyMedium, color = StitchSlate700)
+                                        Text(
+                                            String.format("%.1f hrs / shift", m.requiredOvertimeHours),
+                                            style = IeTypography.dataMonoBold,
+                                            color = StitchNvaRedText
+                                        )
                                     }
                                 }
                             }
@@ -115,28 +229,22 @@ fun CapacityScreen(viewModel: CapacityViewModel, modifier: Modifier = Modifier) 
 }
 
 @Composable
-fun PlanningNumberField(label: String, value: Double, onValueChange: (Double) -> Unit) {
-    var text by remember(value) { mutableStateOf(value.toString()) }
+fun PlanningNumberField(label: String, value: Double, unitSuffix: String = "", onValueChange: (Double) -> Unit) {
+    var text by remember(value) { mutableStateOf(if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()) }
     OutlinedTextField(
         value = text,
-        onValueChange = { 
+        onValueChange = {
             text = it
             it.toDoubleOrNull()?.let { v -> onValueChange(v) }
         },
         label = { Text(label) },
+        trailingIcon = if (unitSuffix.isNotEmpty()) {
+            { Text(unitSuffix, style = IeTypography.dataMono, color = StitchSlate500, modifier = Modifier.padding(end = 8.dp)) }
+        } else null,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = Modifier.fillMaxWidth(),
-        singleLine = true
+        singleLine = true,
+        textStyle = IeTypography.dataMono,
+        shape = IeRadius.inputShape
     )
-}
-
-@Composable
-fun CapacityMetricCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Spacer(Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        }
-    }
 }

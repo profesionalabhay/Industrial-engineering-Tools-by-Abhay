@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -16,6 +17,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.data.ValueClassification
+import com.example.ui.components.*
+import com.example.ui.theme.*
 
 @Composable
 fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
@@ -25,53 +29,108 @@ fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
 
     var showAiDialog by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // Top Bar
-        Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 2.dp) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(StitchSlate50)
+            .padding(IeSpacing.screenPadding)
+    ) {
+        // Top Header
+        IeCard(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DirectionsRun, contentDescription = "Motion", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.DirectionsRun, contentDescription = "Motion", tint = StitchCobalt600)
                     Spacer(Modifier.width(8.dp))
-                    Text("Micro-Motion Study", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Column {
+                        Text("Therblig Micro-Motion Study", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = StitchSlate900)
+                        Text("Granular operator action breakdown, Therblig categorization and waste detection", style = MaterialTheme.typography.bodySmall, color = StitchSlate500)
+                    }
                 }
 
                 Button(
                     onClick = { showAiDialog = true },
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                    colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
+                    shape = IeRadius.buttonShape
                 ) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = "AI Video")
-                    Spacer(Modifier.width(4.dp))
-                    Text("AI Video Analysis")
+                    Icon(Icons.Default.AutoAwesome, contentDescription = "AI Video", modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("AI Video Motion Extract")
                 }
             }
         }
 
-        // Metrics
+        Spacer(Modifier.height(10.dp))
+
+        // Metrics Banner
         val totalTime = motions.sumOf { it.timeSec }
         val vaTime = motions.filter { it.category.isValueAdding }.sumOf { it.timeSec }
         val nvaTime = totalTime - vaTime
         val vaPercent = if (totalTime > 0) (vaTime / totalTime) * 100 else 0.0
 
-        Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
-            Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
-                MetricItem("Total Time", String.format("%.1f s", totalTime))
-                MetricItem("Value Adding", String.format("%.1f s", vaTime))
-                MetricItem("Non-Value Adding", String.format("%.1f s", nvaTime))
-                MetricItem("VA Ratio", String.format("%.1f%%", vaPercent))
-            }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            IeKpiCard(
+                title = "Total Micro-Motion Time",
+                value = String.format("%.2f", totalTime),
+                unit = " s",
+                subtitle = "${motions.size} elementary actions",
+                modifier = Modifier.weight(1f)
+            )
+            IeKpiCard(
+                title = "Value-Added Time",
+                value = String.format("%.2f", vaTime),
+                unit = " s",
+                trend = "Transform",
+                isPositiveTrend = true,
+                modifier = Modifier.weight(1f)
+            )
+            IeKpiCard(
+                title = "Non-Value Added Time",
+                value = String.format("%.2f", nvaTime),
+                unit = " s",
+                isAlert = nvaTime > vaTime,
+                subtitle = "Elimination target",
+                modifier = Modifier.weight(1f)
+            )
+            IeKpiCard(
+                title = "Motion Efficiency (VA Ratio)",
+                value = String.format("%.1f", vaPercent),
+                unit = "%",
+                trend = "Ratio",
+                isPositiveTrend = vaPercent > 50.0,
+                modifier = Modifier.weight(1f)
+            )
         }
 
-        Row(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Spacer(Modifier.height(10.dp))
+
+        Row(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
             // Manual Entry Form
-            Card(modifier = Modifier.weight(1f).fillMaxHeight(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Add Manual Motion", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(16.dp))
-                    
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
+                shape = IeRadius.cardShape,
+                border = BorderStroke(1.dp, StitchSlate200),
+                colors = CardDefaults.cardColors(containerColor = StitchWhite),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text("RECORD MOTION ELEMENT", style = IeTypography.tableHeader, color = StitchSlate500)
+                    HorizontalDivider(color = StitchSlate200)
+
                     var desc by remember { mutableStateOf("") }
                     var time by remember { mutableStateOf("") }
                     var category by remember { mutableStateOf(MotionCategory.REACH) }
@@ -80,31 +139,49 @@ fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
                     OutlinedTextField(
                         value = desc,
                         onValueChange = { desc = it },
-                        label = { Text("Description") },
-                        modifier = Modifier.fillMaxWidth()
+                        label = { Text("Element Description") },
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        shape = IeRadius.inputShape
                     )
-                    Spacer(Modifier.height(8.dp))
-                    
+
                     Box(modifier = Modifier.fillMaxWidth()) {
-                        OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(category.name)
+                        OutlinedButton(
+                            onClick = { expanded = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = IeRadius.inputShape,
+                            border = BorderStroke(1.dp, StitchSlate300)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Therblig: ${category.name}", color = StitchSlate900)
+                                Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = StitchSlate600)
+                            }
                         }
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            MotionCategory.values().forEach { cat ->
-                                DropdownMenuItem(text = { Text(cat.name) }, onClick = { category = cat; expanded = false })
+                            MotionCategory.entries.forEach { cat ->
+                                DropdownMenuItem(
+                                    text = { Text("${cat.name} (${if (cat.isValueAdding) "VA" else "NVA"})", style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = { category = cat; expanded = false }
+                                )
                             }
                         }
                     }
-                    Spacer(Modifier.height(8.dp))
 
                     OutlinedTextField(
                         value = time,
                         onValueChange = { time = it },
-                        label = { Text("Time (Seconds)") },
+                        label = { Text("Duration (Seconds)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = IeTypography.dataMono,
+                        shape = IeRadius.inputShape
                     )
-                    Spacer(Modifier.height(16.dp))
+
+                    Spacer(Modifier.height(4.dp))
 
                     Button(
                         onClick = {
@@ -114,6 +191,8 @@ fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
                                 time = ""
                             }
                         },
+                        colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
+                        shape = IeRadius.buttonShape,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text("Add Motion Element")
@@ -122,11 +201,24 @@ fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
             }
 
             // Motion List
-            Card(modifier = Modifier.weight(2f).fillMaxHeight(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Card(
+                modifier = Modifier
+                    .weight(2f)
+                    .fillMaxHeight(),
+                shape = IeRadius.cardShape,
+                border = BorderStroke(1.dp, StitchSlate200),
+                colors = CardDefaults.cardColors(containerColor = StitchWhite),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     item {
-                        Text("Recorded Sequence", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Spacer(Modifier.height(8.dp))
+                        Text("CHRONOLOGICAL MOTION SEQUENCE", style = IeTypography.tableHeader, color = StitchSlate500)
+                        Spacer(Modifier.height(4.dp))
+                        HorizontalDivider(color = StitchSlate200)
+                        Spacer(Modifier.height(4.dp))
                     }
                     items(motions) { motion ->
                         MotionRow(motion, onDelete = { viewModel.deleteMotion(motion.id) })
@@ -138,46 +230,60 @@ fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
 
     if (showAiDialog) {
         AlertDialog(
-            onDismissRequest = { 
+            onDismissRequest = {
                 showAiDialog = false
                 viewModel.clearSuggestions()
             },
-            icon = { Icon(Icons.Default.VideoFile, contentDescription = "Video") },
-            title = { Text("AI Video Analysis") },
+            shape = IeRadius.dialogShape,
+            containerColor = StitchWhite,
+            icon = { Icon(Icons.Default.VideoFile, contentDescription = "Video", tint = StitchCobalt600) },
+            title = {
+                Text(
+                    "AI Micro-Motion Extraction",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = StitchSlate900
+                )
+            },
             text = {
                 if (isAnalyzingVideo) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth().padding(32.dp)) {
-                        CircularProgressIndicator()
+                        CircularProgressIndicator(color = StitchCobalt600, strokeWidth = 3.dp)
                         Spacer(Modifier.height(16.dp))
-                        Text("Gemini is extracting micro-motions from video...")
+                        Text("Gemini is extracting micro-motions from operator footage...", style = MaterialTheme.typography.bodyMedium, color = StitchSlate600)
                     }
                 } else if (aiSuggestions.isNotEmpty()) {
-                    LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
-                        item { Text("Suggested Elements:", fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 8.dp)) }
+                    LazyColumn(modifier = Modifier.heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        item {
+                            Text("Extracted Candidate Elements:", style = IeTypography.tableHeader, color = StitchSlate600)
+                        }
                         items(aiSuggestions) { sug ->
                             Card(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                                shape = IeRadius.cardShape,
+                                border = BorderStroke(1.dp, StitchSlate200),
+                                colors = CardDefaults.cardColors(containerColor = StitchSlate50),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                             ) {
                                 Row(
-                                    modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                                    modifier = Modifier.padding(10.dp).fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
-                                        Text(sug.description, style = MaterialTheme.typography.bodyMedium)
-                                        Row {
-                                            Text(sug.category.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                        Text(sug.description, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = StitchSlate900)
+                                        Spacer(Modifier.height(2.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(sug.category.name, style = IeTypography.dataMonoBold, color = StitchCobalt700)
                                             Spacer(Modifier.width(8.dp))
-                                            Text("${sug.timeSec}s", style = MaterialTheme.typography.labelSmall)
+                                            Text("${sug.timeSec}s", style = IeTypography.dataMono, color = StitchSlate600)
                                         }
                                     }
                                     Row {
-                                        IconButton(onClick = { viewModel.acceptSuggestion(sug) }) {
-                                            Icon(Icons.Default.Check, "Accept", tint = Color(0xFF388E3C))
+                                        IconButton(onClick = { viewModel.acceptSuggestion(sug) }, modifier = Modifier.size(28.dp)) {
+                                            Icon(Icons.Default.Check, "Accept", tint = StitchVaGreenText)
                                         }
-                                        IconButton(onClick = { viewModel.rejectSuggestion(sug.id) }) {
-                                            Icon(Icons.Default.Close, "Reject", tint = MaterialTheme.colorScheme.error)
+                                        IconButton(onClick = { viewModel.rejectSuggestion(sug.id) }, modifier = Modifier.size(28.dp)) {
+                                            Icon(Icons.Default.Close, "Reject", tint = StitchNvaRed)
                                         }
                                     }
                                 }
@@ -185,55 +291,74 @@ fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
                         }
                     }
                 } else {
-                    Text("Upload an operator video to have Gemini automatically extract micro-motions (Reach, Grasp, Walk, etc.) and generate a timeline.")
+                    Text(
+                        "Upload or stream operator video to have Gemini automatically extract micro-motions (Reach, Grasp, Move, Position, Release, Delay) into an analyzed motion sequence.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = StitchSlate600
+                    )
                 }
             },
             confirmButton = {
                 if (!isAnalyzingVideo && aiSuggestions.isEmpty()) {
-                    Button(onClick = { viewModel.analyzeVideoMock("Operator at Station 1") }) {
-                        Text("Analyze Mock Video")
+                    Button(
+                        onClick = { viewModel.analyzeVideoMock("Operator at Assembly Station 1") },
+                        colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
+                        shape = IeRadius.buttonShape
+                    ) {
+                        Text("Analyze Demo Feed")
                     }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { 
-                    showAiDialog = false
-                    viewModel.clearSuggestions()
-                }) { Text("Close") }
+                OutlinedButton(
+                    onClick = {
+                        showAiDialog = false
+                        viewModel.clearSuggestions()
+                    },
+                    shape = IeRadius.buttonShape,
+                    border = BorderStroke(1.dp, StitchSlate300)
+                ) {
+                    Text("Close", color = StitchSlate700)
+                }
             }
         )
     }
 }
 
 @Composable
-fun MetricItem(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer)
-        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-    }
-}
-
-@Composable
 fun MotionRow(motion: MotionElement, onDelete: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small).padding(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = IeRadius.cardShape,
+        border = BorderStroke(1.dp, StitchSlate200),
+        colors = CardDefaults.cardColors(containerColor = StitchSlate50),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Badge(containerColor = if (motion.category.isValueAdding) Color(0xFF388E3C) else MaterialTheme.colorScheme.error) {
-            Text(if (motion.category.isValueAdding) "VA" else "NVA", color = Color.White, modifier = Modifier.padding(4.dp))
-        }
-        Spacer(Modifier.width(12.dp))
-        
-        Column(modifier = Modifier.weight(1f)) {
-            Text(motion.description, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-            Text(motion.category.name, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        
-        Text("${motion.timeSec}s", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.width(16.dp))
-        
-        IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
-            Icon(Icons.Default.Delete, "Delete", tint = MaterialTheme.colorScheme.error)
+        Row(
+            modifier = Modifier.padding(10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IeClassificationBadge(
+                valueClassification = if (motion.category.isValueAdding) ValueClassification.VA else ValueClassification.NVA
+            )
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(motion.description, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = StitchSlate900)
+                Spacer(Modifier.height(2.dp))
+                Text(motion.category.name, style = IeTypography.dataMono, color = StitchSlate600)
+            }
+
+            Text(
+                "${motion.timeSec}s",
+                style = IeTypography.dataMonoBold,
+                color = StitchSlate900
+            )
+            Spacer(Modifier.width(12.dp))
+
+            IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Default.Delete, "Delete", tint = StitchNvaRed, modifier = Modifier.size(16.dp))
+            }
         }
     }
 }

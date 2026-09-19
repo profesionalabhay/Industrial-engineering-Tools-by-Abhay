@@ -27,8 +27,12 @@ sealed class Screen(val route: String, val title: String, val icon: ImageVector)
     data object Ergonomics : Screen("ergonomics", "Ergonomics", Icons.Default.Accessibility)
     data object Savings : Screen("savings", "Savings", Icons.Default.AttachMoney)
     data object AiCopilot : Screen("ai-copilot", "AI Copilot", Icons.Default.AutoAwesome)
+    data object ManualStudy : Screen("manual-study", "Manual Study", Icons.Default.Timer)
+    data object Simulation : Screen("simulation", "Simulation", Icons.Default.PlayCircleFilled)
+    data object Enterprise : Screen("enterprise", "Enterprise", Icons.Default.Public)
     data object Reports : Screen("reports", "Reports", Icons.Default.Summarize)
     data object Settings : Screen("settings", "Settings", Icons.Default.Settings)
+    data object About : Screen("about", "About", Icons.Default.Info)
 }
 
 val screens = listOf(
@@ -36,10 +40,12 @@ val screens = listOf(
     Screen.Projects,
     Screen.TimeStudy,
     Screen.VideoStudy,
+    Screen.ManualStudy,
     Screen.Yamazumi,
     Screen.WorkBalance,
     Screen.LineBalance,
     Screen.WhatIf,
+    Screen.Simulation,
     Screen.Vsm,
     Screen.Motion,
     Screen.Spaghetti,
@@ -53,6 +59,18 @@ val screens = listOf(
     Screen.Ergonomics,
     Screen.Savings,
     Screen.AiCopilot,
+    Screen.Enterprise,
     Screen.Reports,
-    Screen.Settings
+    Screen.Settings,
+    Screen.About
+)
+
+data class NavSection(val title: String, val screens: List<Screen>)
+
+val navSections = listOf(
+    NavSection("OPERATIONS & MEASUREMENT", listOf(Screen.Dashboard, Screen.Projects, Screen.TimeStudy, Screen.VideoStudy, Screen.ManualStudy, Screen.StandardWork)),
+    NavSection("LINE BALANCING & SIMULATION", listOf(Screen.Yamazumi, Screen.WorkBalance, Screen.LineBalance, Screen.WhatIf, Screen.Simulation)),
+    NavSection("CAPACITY & LEAN", listOf(Screen.Capacity, Screen.Manpower, Screen.MultiModel, Screen.Oee, Screen.Kaizen)),
+    NavSection("DIAGRAMS & MOTION", listOf(Screen.Vsm, Screen.Motion, Screen.Spaghetti, Screen.Layout, Screen.Ergonomics)),
+    NavSection("INTELLIGENCE & SYSTEM", listOf(Screen.AiCopilot, Screen.Enterprise, Screen.Savings, Screen.Reports, Screen.Settings, Screen.About))
 )

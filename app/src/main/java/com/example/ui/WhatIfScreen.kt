@@ -1,5 +1,6 @@
 package com.example.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -20,136 +21,168 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.*
 import com.example.ui.components.*
+import com.example.ui.theme.*
 
 @Composable
 fun WhatIfScreen(viewModel: WhatIfViewModel, modifier: Modifier = Modifier) {
     val scenarios by viewModel.scenarios.collectAsStateWithLifecycle()
     val activeScenarioId by viewModel.activeScenarioId.collectAsStateWithLifecycle()
-    
+
     val baseMetrics by viewModel.baselineMetrics.collectAsStateWithLifecycle()
     val activeMetrics by viewModel.activeMetrics.collectAsStateWithLifecycle()
     val warnings by viewModel.warnings.collectAsStateWithLifecycle()
-    
+
     val aiAnalysis by viewModel.aiAnalysis.collectAsStateWithLifecycle()
     val isAnalyzing by viewModel.isAnalyzing.collectAsStateWithLifecycle()
 
     val activeScenario = scenarios.find { it.id == activeScenarioId }
     var showAiDialog by remember { mutableStateOf(false) }
 
-    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        // Scenario Header
-        Surface(
-            color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 2.dp,
-            modifier = Modifier.fillMaxWidth()
-        ) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(StitchSlate50)
+            .padding(IeSpacing.screenPadding)
+    ) {
+        // Scenario Header & Controls
+        IeCard(modifier = Modifier.fillMaxWidth()) {
             Row(
-                modifier = Modifier.padding(16.dp).fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Science, contentDescription = "Simulator", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.Science, contentDescription = "Simulator", tint = StitchCobalt600)
                     Spacer(Modifier.width(8.dp))
-                    Text("IE What-If Simulator", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    
-                    Spacer(Modifier.width(24.dp))
-                    
+                    Column {
+                        Text("What-If Simulation Engine", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = StitchSlate900)
+                        Text("Evaluate operator reallocation and process kaizen without interrupting line", style = MaterialTheme.typography.bodySmall, color = StitchSlate500)
+                    }
+
+                    Spacer(Modifier.width(20.dp))
+
                     var expanded by remember { mutableStateOf(false) }
                     Box {
-                        OutlinedButton(onClick = { expanded = true }) {
-                            Text(activeScenario?.name ?: "Select Scenario")
-                            Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                        OutlinedButton(
+                            onClick = { expanded = true },
+                            shape = IeRadius.buttonShape,
+                            border = BorderStroke(1.dp, StitchSlate300)
+                        ) {
+                            Text(activeScenario?.name ?: "Select Scenario", color = StitchSlate900, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = StitchSlate600)
                         }
                         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                             scenarios.forEach { scn ->
                                 DropdownMenuItem(
-                                    text = { Text(scn.name) },
-                                    onClick = { 
+                                    text = { Text(scn.name, style = MaterialTheme.typography.bodyMedium) },
+                                    onClick = {
                                         viewModel.selectScenario(scn.id)
-                                        expanded = false 
+                                        expanded = false
                                     },
                                     trailingIcon = if (scn.id == activeScenarioId) {
-                                        { Icon(Icons.Default.Check, contentDescription = "Active") }
+                                        { Icon(Icons.Default.Check, contentDescription = "Active", tint = StitchCobalt600) }
                                     } else null
                                 )
                             }
                             HorizontalDivider()
                             DropdownMenuItem(
-                                text = { Text("New Scenario") },
-                                onClick = { 
+                                text = { Text("Create Scenario", style = MaterialTheme.typography.bodyMedium) },
+                                onClick = {
                                     viewModel.createScenario("Scenario ${scenarios.size + 1}")
-                                    expanded = false 
+                                    expanded = false
                                 },
-                                leadingIcon = { Icon(Icons.Default.Add, contentDescription = "Add") }
+                                leadingIcon = { Icon(Icons.Default.Add, contentDescription = "Add", tint = StitchCobalt600) }
                             )
                         }
                     }
                 }
-                
+
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilledTonalButton(onClick = { activeScenarioId?.let { viewModel.duplicateScenario(it) } }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = "Duplicate", modifier = Modifier.size(18.dp))
+                    OutlinedButton(
+                        onClick = { activeScenarioId?.let { viewModel.duplicateScenario(it) } },
+                        shape = IeRadius.buttonShape,
+                        border = BorderStroke(1.dp, StitchSlate300)
+                    ) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = "Duplicate", modifier = Modifier.size(16.dp), tint = StitchSlate700)
                         Spacer(Modifier.width(4.dp))
-                        Text("Duplicate")
+                        Text("Duplicate", color = StitchSlate800)
                     }
-                    OutlinedButton(onClick = { viewModel.resetScenario() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(18.dp))
+                    OutlinedButton(
+                        onClick = { viewModel.resetScenario() },
+                        shape = IeRadius.buttonShape,
+                        border = BorderStroke(1.dp, StitchSlate300)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Reset", modifier = Modifier.size(16.dp), tint = StitchSlate700)
                         Spacer(Modifier.width(4.dp))
-                        Text("Reset Baseline")
+                        Text("Reset Baseline", color = StitchSlate800)
                     }
                     Button(
-                        onClick = { 
+                        onClick = {
                             viewModel.analyzeScenario()
                             showAiDialog = true
                         },
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                        colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
+                        shape = IeRadius.buttonShape
                     ) {
-                        Icon(Icons.Default.AutoAwesome, contentDescription = "Analyze")
-                        Spacer(Modifier.width(4.dp))
+                        Icon(Icons.Default.AutoAwesome, contentDescription = "Analyze", modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
                         Text("Analyze Scenario")
                     }
                 }
             }
         }
 
+        Spacer(Modifier.height(12.dp))
+
         // Metrics Comparison
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
             ComparisonCard("Balance Efficiency", baseMetrics?.balanceEfficiency?.times(100), activeMetrics?.balanceEfficiency?.times(100), "%", Modifier.weight(1f))
             ComparisonCard("Max Cycle Time", baseMetrics?.maxCycleTime, activeMetrics?.maxCycleTime, "s", Modifier.weight(1f), invertColor = true)
-            ComparisonCard("Capacity", baseMetrics?.capacityPerHr, activeMetrics?.capacityPerHr, "/hr", Modifier.weight(1f))
-            ComparisonCard("VA Time %", baseMetrics?.vaPercent, activeMetrics?.vaPercent, "%", Modifier.weight(1f))
+            ComparisonCard("Throughput Capacity", baseMetrics?.capacityPerHr, activeMetrics?.capacityPerHr, " pcs/h", Modifier.weight(1f))
+            ComparisonCard("VA Stream %", baseMetrics?.vaPercent, activeMetrics?.vaPercent, "%", Modifier.weight(1f))
         }
 
         // Warnings List
         if (warnings.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
             Card(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                modifier = Modifier.fillMaxWidth(),
+                shape = IeRadius.cardShape,
+                border = BorderStroke(1.dp, StitchNvaRed.copy(alpha = 0.5f)),
+                colors = CardDefaults.cardColors(containerColor = StitchNvaRedLight),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Warning, contentDescription = "Warning", tint = MaterialTheme.colorScheme.onErrorContainer)
+                        Icon(Icons.Default.Warning, contentDescription = "Warning", tint = StitchNvaRedText, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text("Constraint Violations (${warnings.size})", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onErrorContainer, fontWeight = FontWeight.Bold)
+                        Text("Precedence Constraint Violations (${warnings.size})", style = MaterialTheme.typography.titleSmall, color = StitchNvaRedText, fontWeight = FontWeight.Bold)
                     }
+                    Spacer(Modifier.height(4.dp))
                     warnings.forEach { warning ->
-                        Text("• $warning", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                        Text("• $warning", style = MaterialTheme.typography.bodySmall, color = StitchNvaRedText)
                     }
                 }
             }
         }
 
+        Spacer(Modifier.height(12.dp))
+
         // Scenario Editor workspace
         activeScenario?.let { scn ->
             val elementsByStation = scn.elements.groupBy { it.stationId }
-            
+
             LazyRow(
-                modifier = Modifier.fillMaxSize().padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.fillMaxSize(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(scn.stations) { station ->
                     val stationElements = elementsByStation[station.id]?.sortedBy { it.sequence } ?: emptyList()
@@ -175,39 +208,70 @@ fun WhatIfScreen(viewModel: WhatIfViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun ComparisonCard(title: String, base: Double?, active: Double?, unit: String, modifier: Modifier = Modifier, invertColor: Boolean = false) {
+fun ComparisonCard(
+    title: String,
+    base: Double?,
+    active: Double?,
+    unit: String,
+    modifier: Modifier = Modifier,
+    invertColor: Boolean = false
+) {
     Card(
         modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        shape = IeRadius.cardShape,
+        border = BorderStroke(1.dp, StitchSlate200),
+        colors = CardDefaults.cardColors(containerColor = StitchWhite),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
-            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Column(modifier = Modifier.padding(12.dp).fillMaxWidth()) {
+            Text(title.uppercase(), style = IeTypography.tableHeader, color = StitchSlate500)
             Spacer(Modifier.height(8.dp))
-            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Row(
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val formatValue: (Double?) -> String = { v ->
+                    if (v == null) "-"
+                    else if (v % 1.0 == 0.0 && (unit.contains("pcs") || unit.contains("stn"))) "${v.toInt()}$unit"
+                    else String.format("%.1f%s", v, unit)
+                }
+
                 Column {
-                    Text("Baseline", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(if (base != null) String.format("%.1f$unit", base) else "-", style = MaterialTheme.typography.bodyMedium)
+                    Text("Baseline", style = MaterialTheme.typography.labelSmall, color = StitchSlate400)
+                    Text(
+                        formatValue(base),
+                        style = IeTypography.dataMono,
+                        color = StitchSlate600
+                    )
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("Scenario", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Scenario", style = MaterialTheme.typography.labelSmall, color = StitchSlate400)
                     Row(verticalAlignment = Alignment.Bottom) {
                         Text(
-                            text = if (active != null) String.format("%.1f$unit", active) else "-",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
+                            text = formatValue(active),
+                            style = IeTypography.kpiMedium,
+                            color = StitchSlate900
                         )
                         if (base != null && active != null) {
                             val diff = active - base
                             if (kotlin.math.abs(diff) > 0.05) {
                                 val isPositiveImpact = if (invertColor) diff < 0 else diff > 0
-                                val color = if (isPositiveImpact) VaColor else NvaColor
-                                Text(
-                                    text = String.format(" (%+.1f)", diff),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = color,
+                                val color = if (isPositiveImpact) StitchVaGreenText else StitchNvaRedText
+                                val bg = if (isPositiveImpact) StitchVaGreenLight else StitchNvaRedLight
+                                Surface(
+                                    shape = IeRadius.badgeShape,
+                                    color = bg,
                                     modifier = Modifier.padding(start = 4.dp, bottom = 2.dp)
-                                )
+                                ) {
+                                    Text(
+                                        text = String.format("%+.1f", diff),
+                                        style = IeTypography.dataMonoBold,
+                                        fontSize = 10.sp,
+                                        color = color,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -229,20 +293,47 @@ fun StationEditorColumn(
     val isOverTakt = totalTime > taktTime
 
     Card(
-        modifier = Modifier.width(320.dp).fillMaxHeight(),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+        modifier = Modifier
+            .width(320.dp)
+            .fillMaxHeight(),
+        shape = IeRadius.cardShape,
+        colors = CardDefaults.cardColors(containerColor = StitchWhite),
+        border = BorderStroke(1.dp, if (isOverTakt) StitchNvaRed else StitchSlate200),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp).fillMaxSize()) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Text(station.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Badge(containerColor = if (isOverTakt) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary) {
-                    Text(String.format("%.1fs", totalTime), color = Color.White, modifier = Modifier.padding(4.dp))
+        Column(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxSize()
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(station.name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = StitchSlate900)
+                Surface(
+                    shape = IeRadius.badgeShape,
+                    color = if (isOverTakt) StitchNvaRedLight else StitchVaGreenLight,
+                    border = BorderStroke(1.dp, if (isOverTakt) StitchNvaRed.copy(alpha = 0.5f) else StitchVaGreen.copy(alpha = 0.5f))
+                ) {
+                    Text(
+                        String.format("%.1fs", totalTime),
+                        style = IeTypography.dataMonoBold,
+                        color = if (isOverTakt) StitchNvaRedText else StitchVaGreenText,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
                 }
             }
-            
-            Spacer(Modifier.height(12.dp))
-            
-            LazyColumn(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+
+            Spacer(Modifier.height(10.dp))
+            HorizontalDivider(color = StitchSlate200)
+            Spacer(Modifier.height(8.dp))
+
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 items(elements) { element ->
                     WhatIfElementCard(element, allStations, viewModel)
                 }
@@ -261,26 +352,41 @@ fun WhatIfElementCard(
     var editTimeText by remember(element.standardTime) { mutableStateOf(element.standardTime.toString()) }
 
     Card(
-        modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded },
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = !expanded },
+        shape = IeRadius.cardShape,
+        border = BorderStroke(1.dp, StitchSlate200),
+        colors = CardDefaults.cardColors(containerColor = StitchSlate50),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(element.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Time: ${String.format("%.1fs", element.standardTime)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(element.name, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = StitchSlate900)
+                    Text(
+                        "Time: ${String.format("%.1fs", element.standardTime)}",
+                        style = IeTypography.dataMono,
+                        color = StitchSlate600
+                    )
                 }
-                
+
                 var showMoveMenu by remember { mutableStateOf(false) }
                 Box {
-                    IconButton(onClick = { showMoveMenu = true }) {
-                        Icon(Icons.Default.SwapHoriz, contentDescription = "Move")
+                    IconButton(
+                        onClick = { showMoveMenu = true },
+                        modifier = Modifier.size(28.dp)
+                    ) {
+                        Icon(Icons.Default.SwapHoriz, contentDescription = "Move", tint = StitchCobalt600, modifier = Modifier.size(18.dp))
                     }
                     DropdownMenu(expanded = showMoveMenu, onDismissRequest = { showMoveMenu = false }) {
                         stations.forEach { station ->
                             DropdownMenuItem(
-                                text = { Text(station.name) },
+                                text = { Text("Move to ${station.name}", style = MaterialTheme.typography.bodyMedium) },
                                 onClick = {
                                     viewModel.moveElement(element.id, station.id)
                                     showMoveMenu = false
@@ -290,40 +396,47 @@ fun WhatIfElementCard(
                     }
                 }
             }
-            
+
             if (expanded) {
                 Spacer(Modifier.height(8.dp))
-                HorizontalDivider()
+                HorizontalDivider(color = StitchSlate200)
                 Spacer(Modifier.height(8.dp))
-                
+
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
                         value = editTimeText,
                         onValueChange = { editTimeText = it },
-                        label = { Text("CT (s)") },
+                        label = { Text("Cycle Time (s)") },
                         modifier = Modifier.weight(1f),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true
+                        singleLine = true,
+                        textStyle = IeTypography.dataMono,
+                        shape = IeRadius.inputShape
                     )
                     Spacer(Modifier.width(8.dp))
-                    Button(onClick = { 
-                        editTimeText.toDoubleOrNull()?.let {
-                            viewModel.updateElementTime(element.id, it)
-                        }
-                    }) {
+                    Button(
+                        onClick = {
+                            editTimeText.toDoubleOrNull()?.let {
+                                viewModel.updateElementTime(element.id, it)
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
+                        shape = IeRadius.buttonShape
+                    ) {
                         Text("Apply")
                     }
                 }
-                
+
                 Spacer(Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = { viewModel.eliminateElement(element.id) },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    shape = IeRadius.buttonShape,
+                    border = BorderStroke(1.dp, StitchNvaRed.copy(alpha = 0.5f))
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = "Eliminate")
-                    Spacer(Modifier.width(4.dp))
-                    Text("Eliminate Element")
+                    Icon(Icons.Default.Delete, contentDescription = "Eliminate", tint = StitchNvaRed, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Eliminate Element (Kaizen)", color = StitchNvaRedText)
                 }
             }
         }
@@ -338,33 +451,62 @@ fun AiAnalysisDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "AI") },
-        title = { Text("AI Scenario Analysis") },
+        shape = IeRadius.dialogShape,
+        containerColor = StitchWhite,
+        icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "AI", tint = StitchCobalt600) },
+        title = {
+            Text(
+                "AI Scenario Evaluation & Bottleneck Analysis",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = StitchSlate900
+            )
+        },
         text = {
             if (isAnalyzing) {
-                Column(modifier = Modifier.fillMaxWidth().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator()
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(color = StitchCobalt600, strokeWidth = 3.dp)
                     Spacer(Modifier.height(16.dp))
-                    Text("Gemini is analyzing scenario trade-offs...")
+                    Text("Gemini AI evaluating line balance trade-offs...", style = MaterialTheme.typography.bodyMedium, color = StitchSlate600)
                 }
             } else if (analysis != null) {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     AnalysisSection("Predicted Improvement", analysis.improvements)
-                    AnalysisSection("Trade-Offs", analysis.tradeOffs)
-                    AnalysisSection("Remaining Bottleneck", analysis.remainingBottleneck)
-                    AnalysisSection("Assumptions", analysis.assumptions)
-                    
-                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)) {
+                    AnalysisSection("Trade-Offs & Station Load", analysis.tradeOffs)
+                    AnalysisSection("Remaining Bottleneck Station", analysis.remainingBottleneck)
+                    AnalysisSection("Model Assumptions", analysis.assumptions)
+
+                    Card(
+                        shape = IeRadius.cardShape,
+                        border = BorderStroke(1.dp, StitchNvaRed.copy(alpha = 0.5f)),
+                        colors = CardDefaults.cardColors(containerColor = StitchNvaRedLight),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                    ) {
                         Column(modifier = Modifier.padding(12.dp)) {
-                            Text("Risks", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
-                            Text(analysis.risks, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                            Text("Operational Risks", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = StitchNvaRedText)
+                            Spacer(Modifier.height(4.dp))
+                            Text(analysis.risks, style = MaterialTheme.typography.bodySmall, color = StitchNvaRedText)
                         }
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
+            Button(
+                onClick = onDismiss,
+                colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
+                shape = IeRadius.buttonShape
+            ) {
+                Text("Close")
+            }
         }
     )
 }
@@ -372,7 +514,8 @@ fun AiAnalysisDialog(
 @Composable
 fun AnalysisSection(title: String, content: String) {
     Column {
-        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Text(content, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = StitchCobalt700)
+        Spacer(Modifier.height(2.dp))
+        Text(content, style = MaterialTheme.typography.bodyMedium, color = StitchSlate700)
     }
 }

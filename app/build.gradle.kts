@@ -18,6 +18,14 @@ android {
     versionName = "2.6"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+    val geminiApiKey = (project.findProperty("GEMINI_API_KEY") as? String) ?: System.getenv("GEMINI_API_KEY") ?: ""
+    val nvidiaNimKey = (project.findProperty("NVIDIA_NIM_KEY") as? String) ?: System.getenv("NVIDIA_NIM_KEY") ?: ""
+    val openaiApiKey = (project.findProperty("OPENAI_API_KEY") as? String) ?: System.getenv("OPENAI_API_KEY") ?: ""
+
+    buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
+    buildConfigField("String", "NVIDIA_NIM_KEY", "\"$nvidiaNimKey\"")
+    buildConfigField("String", "OPENAI_API_KEY", "\"$openaiApiKey\"")
   }
 
   signingConfigs {
@@ -61,6 +69,9 @@ secrets {
   propertiesFileName = ".env"
   defaultPropertiesFileName = ".env.example"
   ignoreList.add("FIREBASE_APPCHECK_DEBUG_TOKEN")
+  ignoreList.add("GEMINI_API_KEY")
+  ignoreList.add("NVIDIA_NIM_KEY")
+  ignoreList.add("OPENAI_API_KEY")
 }
 
 // Some unused dependencies are commented out below instead of being removed.

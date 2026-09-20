@@ -4,9 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.ai.*
 import com.example.data.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.*
 
@@ -26,37 +24,45 @@ class AiCopilotViewModel(private val repository: ManufacturingRepository) : View
     val uiState: StateFlow<AiCopilotUiState> = _uiState.asStateFlow()
 
     private val aiEngine = AIEngine(AIContextBuilder())
+    private var dataJob: kotlinx.coroutines.Job? = null
 
     fun initialize(projectId: String) {
-        viewModelScope.launch {
-            val providers = repository.getAiProviders()
-            val models = repository.getAiModels()
-            val history = repository.getAiChatMessages(projectId)
-            
-            val defaultProvider = providers.find { it.isActive && it.type == AIProviderType.GEMINI } ?: providers.firstOrNull()
-            val defaultModel = models.find { it.providerId == defaultProvider?.id && it.isDefault } ?: models.find { it.providerId == defaultProvider?.id }
+        _uiState.update { it.copy(currentProjectId = projectId) }
+        
+        dataJob?.cancel()
+        dataJob = viewModelScope.launch {
+            // Collect all necessary Flows
+            combine(
+                repository.getAiProviders(),
+                repository.getAiModels(),
+                repository.getAiChatMessages(projectId)
+            ) { providers, models, history ->
+                val defaultProvider = providers.find { it.isActive && it.type == AIProviderType.GEMINI } ?: providers.firstOrNull()
+                val defaultModel = models.find { it.providerId == defaultProvider?.id && it.isDefault } ?: models.find { it.providerId == defaultProvider?.id }
 
-            _uiState.value = _uiState.value.copy(
-                messages = history,
-                providers = providers,
-                models = models,
-                selectedProvider = defaultProvider,
-                selectedModel = defaultModel,
-                currentProjectId = projectId
-            )
+                _uiState.update { it.copy(
+                    messages = history,
+                    providers = providers,
+                    models = models,
+                    selectedProvider = it.selectedProvider ?: defaultProvider,
+                    selectedModel = it.selectedModel ?: defaultModel
+                ) }
+            }.collect()
         }
     }
 
     fun selectProvider(provider: AIProviderConfig) {
-        val models = _uiState.value.models.filter { it.providerId == provider.id }
-        _uiState.value = _uiState.value.copy(
-            selectedProvider = provider,
-            selectedModel = models.find { it.isDefault } ?: models.firstOrNull()
-        )
+        viewModelScope.launch {
+            val models = repository.getAiModels().first().filter { it.providerId == provider.id }
+            _uiState.update { it.copy(
+                selectedProvider = provider,
+                selectedModel = models.find { it.isDefault } ?: models.firstOrNull()
+            ) }
+        }
     }
 
     fun selectModel(model: AIModelConfig) {
-        _uiState.value = _uiState.value.copy(selectedModel = model)
+        _uiState.update { it.copy(selectedModel = model) }
     }
 
     fun sendMessage(content: String) {
@@ -71,28 +77,26 @@ class AiCopilotViewModel(private val repository: ManufacturingRepository) : View
             content = content
         )
 
-        _uiState.value = _uiState.value.copy(
-            messages = _uiState.value.messages + userMessage,
-            isAnalyzing = true,
-            error = null
-        )
-        repository.saveAiChatMessage(userMessage)
-
+        _uiState.update { it.copy(isAnalyzing = true, error = null) }
+        
         viewModelScope.launch {
-            // Gather all IE context
-            val project = repository.projects.find { it.id == projectId } ?: return@launch
-            val models = repository.models.filter { it.projectId == projectId }
-            val stations = repository.stations.filter { it.processId == (repository.processes.find { it.lineId == project.lineId }?.id ?: "") }
-            val elements = repository.workElements.filter { it.projectId == projectId }
-            val plan = repository.productionPlans.find { it.projectId == projectId }
-            val mixItems = plan?.let { repository.getModelMixForPlan(it.id) } ?: emptyList()
+            repository.saveAiChatMessage(userMessage)
+
+            // Gather all IE context from database Flows (take first for current snapshot)
+            val project = repository.getProjectById(projectId) ?: return@launch
+            val models = repository.getModelsForProject(projectId).first()
+            val processes = repository.getProcessesForLine(project.lineId).first()
+            val stations = repository.getAllStations().first().filter { st -> processes.any { it.id == st.processId } }
+            val elements = repository.getWorkElementsForProject(projectId).first()
+            val plan = repository.getProductionPlans(projectId).first().firstOrNull()
+            val mixItems = plan?.let { repository.getModelMixForPlan(it.id).first() } ?: emptyList()
 
             // OpEx Context
-            val oeeRecords = repository.getOeeRecords(projectId)
+            val oeeRecords = repository.getOeeRecords(projectId).first()
             val oeeMetrics = oeeRecords.map { repository.calculateOeeMetrics(it) }
-            val losses = oeeRecords.flatMap { repository.getLossEvents(it.id) }
-            val rcas = repository.getRcaRecords(projectId)
-            val kaizens = repository.getKaizenRecords(projectId)
+            val losses = oeeRecords.flatMap { repository.getLossEvents(it.id).first() }
+            val rcas = repository.getRcaRecords(projectId).first()
+            val kaizens = repository.getAllKaizenRecords().first()
 
             val result = aiEngine.analyze(
                 prompt = content,
@@ -106,29 +110,27 @@ class AiCopilotViewModel(private val repository: ManufacturingRepository) : View
                 losses = losses,
                 rcas = rcas,
                 kaizens = kaizens,
-                history = _uiState.value.messages.dropLast(1), // excluding current user msg already handled
+                history = _uiState.value.messages,
                 modelConfig = model,
                 providerConfig = provider
             )
 
             result.onSuccess { assistantMsg ->
-                _uiState.value = _uiState.value.copy(
-                    messages = _uiState.value.messages + assistantMsg,
-                    isAnalyzing = false
-                )
                 repository.saveAiChatMessage(assistantMsg)
+                _uiState.update { it.copy(isAnalyzing = false) }
             }.onFailure { e ->
-                _uiState.value = _uiState.value.copy(
+                _uiState.update { it.copy(
                     isAnalyzing = false,
                     error = "AI Analysis Failed: ${e.message}"
-                )
+                ) }
             }
         }
     }
 
     fun clearHistory() {
         val projectId = _uiState.value.currentProjectId ?: return
-        repository.deleteAiHistory(projectId)
-        _uiState.value = _uiState.value.copy(messages = emptyList())
+        viewModelScope.launch {
+            repository.deleteAiHistory(projectId)
+        }
     }
 }

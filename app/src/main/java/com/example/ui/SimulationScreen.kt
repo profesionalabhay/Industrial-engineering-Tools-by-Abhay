@@ -26,7 +26,7 @@ fun SimulationScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(projectId) {
-        viewModel.loadResults(projectId)
+        viewModel.initialize(projectId)
     }
 
     Scaffold(

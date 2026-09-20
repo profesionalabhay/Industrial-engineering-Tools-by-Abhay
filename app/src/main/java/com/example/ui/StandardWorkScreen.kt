@@ -29,7 +29,7 @@ fun StandardWorkScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(stationId, modelId) {
-        viewModel.loadStandardWork(stationId, modelId)
+        // Initialized in AppShell with default project
     }
 
     Scaffold(

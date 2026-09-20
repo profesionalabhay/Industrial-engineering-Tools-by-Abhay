@@ -3,9 +3,7 @@ package com.example.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class RcaUiState(
@@ -18,22 +16,26 @@ class RcaViewModel(private val repository: ManufacturingRepository) : ViewModel(
     private val _uiState = MutableStateFlow(RcaUiState())
     val uiState: StateFlow<RcaUiState> = _uiState.asStateFlow()
 
-    fun loadRcas(projectId: String) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            val rcas = repository.getRcaRecords(projectId)
-            _uiState.value = _uiState.value.copy(
-                availableRcas = rcas,
-                isLoading = false
-            )
-            if (rcas.isNotEmpty()) {
-                _uiState.value = _uiState.value.copy(selectedRca = rcas.first())
+    private var dataJob: kotlinx.coroutines.Job? = null
+
+    fun initialize(projectId: String) {
+        dataJob?.cancel()
+        dataJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            repository.getRcaRecords(projectId).collect { rcas ->
+                _uiState.update { it.copy(
+                    availableRcas = rcas,
+                    isLoading = false
+                ) }
+                if (rcas.isNotEmpty() && _uiState.value.selectedRca == null) {
+                    _uiState.update { it.copy(selectedRca = rcas.first()) }
+                }
             }
         }
     }
 
     fun selectRca(rca: RcaRecord) {
-        _uiState.value = _uiState.value.copy(selectedRca = rca)
+        _uiState.update { it.copy(selectedRca = rca) }
     }
 
     fun updateFiveWhys(whyIndex: Int, text: String) {
@@ -45,16 +47,9 @@ class RcaViewModel(private val repository: ManufacturingRepository) : ViewModel(
             newWhys.add(FiveWhyStep(whyIndex + 1, text))
         }
         val updated = current.copy(fiveWhys = newWhys)
-        _uiState.value = _uiState.value.copy(selectedRca = updated)
-        saveRca(updated)
-    }
-
-    private fun saveRca(rca: RcaRecord) {
-        val index = repository.rcaRecords.indexOfFirst { it.id == rca.id }
-        if (index >= 0) {
-            repository.rcaRecords[index] = rca
-        } else {
-            repository.rcaRecords.add(rca)
+        _uiState.update { it.copy(selectedRca = updated) }
+        viewModelScope.launch {
+            repository.insertRcaRecord(updated)
         }
     }
 }

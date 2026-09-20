@@ -3,9 +3,7 @@ package com.example.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class KaizenUiState(
@@ -19,39 +17,39 @@ class KaizenViewModel(private val repository: ManufacturingRepository) : ViewMod
     private val _uiState = MutableStateFlow(KaizenUiState())
     val uiState: StateFlow<KaizenUiState> = _uiState.asStateFlow()
 
-    fun loadKaizens(projectId: String) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            val records = repository.getKaizenRecords(projectId)
-            _uiState.value = _uiState.value.copy(
-                kaizens = records,
-                isLoading = false
-            )
-            if (records.isNotEmpty()) {
-                selectKaizen(records.first())
+    private var dataJob: kotlinx.coroutines.Job? = null
+
+    fun initialize(projectId: String) {
+        dataJob?.cancel()
+        dataJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            repository.getAllKaizenRecords().collect { records ->
+                _uiState.update { it.copy(
+                    kaizens = records,
+                    isLoading = false
+                ) }
+                if (records.isNotEmpty() && _uiState.value.selectedKaizen == null) {
+                    selectKaizen(records.first())
+                }
             }
         }
     }
 
     fun selectKaizen(kaizen: KaizenRecord) {
-        val benefits = repository.improvementBenefits.filter { it.kaizenId == kaizen.id }
-        _uiState.value = _uiState.value.copy(
-            selectedKaizen = kaizen,
-            benefits = benefits
-        )
+        viewModelScope.launch {
+            repository.getImprovementBenefits(kaizen.id).collect { benefits ->
+                _uiState.update { it.copy(
+                    selectedKaizen = kaizen,
+                    benefits = benefits
+                ) }
+            }
+        }
     }
 
     fun updateKaizenStatus(status: KaizenStatus) {
         val current = _uiState.value.selectedKaizen ?: return
-        val updated = current.copy(status = status)
-        val index = repository.kaizenRecords.indexOfFirst { it.id == updated.id }
-        if (index >= 0) {
-            repository.kaizenRecords[index] = updated
+        viewModelScope.launch {
+            repository.insertKaizenRecord(current.copy(status = status))
         }
-        _uiState.value = _uiState.value.copy(selectedKaizen = updated)
-        
-        // Refresh list
-        val records = repository.getKaizenRecords(updated.modelId ?: "P-001")
-        _uiState.value = _uiState.value.copy(kaizens = records)
     }
 }

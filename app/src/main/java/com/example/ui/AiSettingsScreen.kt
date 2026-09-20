@@ -22,8 +22,9 @@ import com.example.ui.theme.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AiSettingsScreen(repository: ManufacturingRepository) {
-    var providers by remember { mutableStateOf(repository.getAiProviders()) }
-    var models by remember { mutableStateOf(repository.getAiModels()) }
+    val providers by repository.getAiProviders().collectAsState(initial = emptyList())
+    val models by repository.getAiModels().collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
     var showAddProviderDialog by remember { mutableStateOf(false) }
     var editingProvider by remember { mutableStateOf<AIProviderConfig?>(null) }
 
@@ -102,9 +103,10 @@ fun AiSettingsScreen(repository: ManufacturingRepository) {
                             Switch(
                                 checked = provider.isActive,
                                 onCheckedChange = { 
-                                    val updated = provider.copy(isActive = it)
-                                    repository.saveAiProvider(updated)
-                                    providers = repository.getAiProviders()
+                                    scope.launch {
+                                        val updated = provider.copy(isActive = it)
+                                        repository.saveAiProvider(updated)
+                                    }
                                 },
                                 colors = SwitchDefaults.colors(checkedThumbColor = StitchCobalt600)
                             )
@@ -151,8 +153,9 @@ fun AiSettingsScreen(repository: ManufacturingRepository) {
             provider = editingProvider,
             onDismiss = { showAddProviderDialog = false; editingProvider = null },
             onSave = { updatedProvider ->
-                repository.saveAiProvider(updatedProvider)
-                providers = repository.getAiProviders()
+                scope.launch {
+                    repository.saveAiProvider(updatedProvider)
+                }
                 showAddProviderDialog = false
                 editingProvider = null
             }

@@ -1,11 +1,11 @@
 package com.example.ui
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.data.*
 import com.example.engine.MixedModelCalculationEngine
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import kotlin.math.max
 
 enum class YamazumiMode {
@@ -45,37 +45,50 @@ data class StationYamazumiMetrics(
     val modelBreakdowns: Map<String, ModelYamazumiBreakdown> = emptyMap()
 )
 
-class YamazumiViewModel : ViewModel() {
-    private val repository = ManufacturingRepository.getInstance()
-
-    private val _metrics = MutableStateFlow<List<StationYamazumiMetrics>>(emptyList())
-    val metrics: StateFlow<List<StationYamazumiMetrics>> = _metrics.asStateFlow()
-
-    private val _taktTime = MutableStateFlow<Double?>(null)
-    val taktTime: StateFlow<Double?> = _taktTime.asStateFlow()
-
-    private val _selectedStation = MutableStateFlow<StationYamazumiMetrics?>(null)
-    val selectedStation: StateFlow<StationYamazumiMetrics?> = _selectedStation.asStateFlow()
-
+class YamazumiViewModel(private val repository: ManufacturingRepository) : ViewModel() {
+    private val _projectId = MutableStateFlow<String?>(null)
+    
     private val _selectedMode = MutableStateFlow(YamazumiMode.MIXED_WEIGHTED)
     val selectedMode: StateFlow<YamazumiMode> = _selectedMode.asStateFlow()
 
     private val _selectedModelId = MutableStateFlow<String?>(null)
     val selectedModelId: StateFlow<String?> = _selectedModelId.asStateFlow()
 
-    private val _availableModels = MutableStateFlow<List<Model>>(emptyList())
-    val availableModels: StateFlow<List<Model>> = _availableModels.asStateFlow()
+    private val _selectedStationId = MutableStateFlow<String?>(null)
 
-    private val _activePlan = MutableStateFlow<ProductionPlan?>(null)
-    val activePlan: StateFlow<ProductionPlan?> = _activePlan.asStateFlow()
+    val metrics: StateFlow<List<StationYamazumiMetrics>> = combine(
+        _projectId.filterNotNull(),
+        _selectedMode,
+        _selectedModelId
+    ) { projectId, mode, modelId ->
+        calculateMetrics(projectId, mode, modelId)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    init {
-        loadData()
+    val taktTime: StateFlow<Double?> = _projectId.filterNotNull().flatMapLatest { pid ->
+        repository.getProductionPlans(pid).map { it.firstOrNull()?.requiredTaktSeconds }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val availableModels: StateFlow<List<Model>> = _projectId.filterNotNull().flatMapLatest { pid ->
+        repository.getModelsForProject(pid)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val activePlan: StateFlow<ProductionPlan?> = _projectId.filterNotNull().flatMapLatest { pid ->
+        repository.getProductionPlans(pid).map { it.firstOrNull() }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val selectedStation: StateFlow<StationYamazumiMetrics?> = combine(
+        metrics,
+        _selectedStationId
+    ) { allMetrics, id ->
+        allMetrics.find { it.station.id == id }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    fun initialize(id: String) {
+        _projectId.value = id
     }
 
     fun setMode(mode: YamazumiMode) {
         _selectedMode.value = mode
-        loadData()
     }
 
     fun selectModel(modelId: String?) {
@@ -83,28 +96,29 @@ class YamazumiViewModel : ViewModel() {
         if (modelId != null) {
             _selectedMode.value = YamazumiMode.MODEL_SPECIFIC
         }
-        loadData()
     }
 
-    fun loadData() {
-        val plan = repository.getProductionPlanForProject("P-001")
-        _activePlan.value = plan
+    fun selectStation(stationId: String?) {
+        _selectedStationId.value = stationId
+    }
+
+    private suspend fun calculateMetrics(projectId: String, mode: YamazumiMode, selectedModelId: String?): List<StationYamazumiMetrics> {
+        val project = repository.getProjectById(projectId) ?: return emptyList()
+        val plan = repository.getProductionPlans(projectId).first().firstOrNull() ?: return emptyList()
         val takt = plan.requiredTaktSeconds
-        _taktTime.value = takt
-
-        val projectModels = repository.models.filter { it.projectId == plan.projectId && it.isActive }
-        _availableModels.value = projectModels
-
-        val mixItems = repository.getModelMixForPlan(plan.id)
+        
+        val projectModels = repository.getModelsForProject(projectId).first().filter { it.isActive }
+        val mixItems = repository.getModelMixForPlan(plan.id).first()
         val mixMap = mixItems.associate { it.modelId to (it.effectiveMixPercentage / 100.0) }
 
-        val elementsByStation = repository.workElements.filter { it.projectId == plan.projectId }.groupBy { it.stationId }
-        val allStations = repository.stations
+        val elements = repository.getWorkElementsForProject(projectId).first()
+        val elementsByStation = elements.groupBy { it.stationId }
+        val processes = repository.getProcessesForLine(project.lineId).first()
+        val allStations = repository.getAllStations().first().filter { st -> processes.any { it.id == st.processId } }
 
-        val newMetrics = allStations.map { station ->
+        return allStations.map { station ->
             val stElements = elementsByStation[station.id] ?: emptyList()
 
-            // Compute per-model breakdown
             val breakdowns = projectModels.associate { model ->
                 val applicableElements = mutableListOf<WorkElement>()
                 var mVa = 0.0
@@ -135,7 +149,6 @@ class YamazumiViewModel : ViewModel() {
                 )
             }
 
-            // Calculate weighted sums
             var weightedVa = 0.0
             var weightedNnva = 0.0
             var weightedNva = 0.0
@@ -147,34 +160,20 @@ class YamazumiViewModel : ViewModel() {
             }
             val weightedTotal = weightedVa + weightedNnva + weightedNva
 
-            // Maximum load
             val maxEntry = breakdowns.maxByOrNull { it.value.totalTime }
             val maxTotal = maxEntry?.value?.totalTime ?: 0.0
             val maxModelName = maxEntry?.value?.modelName ?: ""
 
-            // Mode-specific display values
-            val (displayTotal, displayVa, displayNnva, displayNva) = when (_selectedMode.value) {
-                YamazumiMode.MIXED_WEIGHTED -> {
-                    listOf(weightedTotal, weightedVa, weightedNnva, weightedNva)
-                }
+            val (displayTotal, displayVa, displayNnva, displayNva) = when (mode) {
+                YamazumiMode.MIXED_WEIGHTED -> listOf(weightedTotal, weightedVa, weightedNnva, weightedNva)
                 YamazumiMode.MAXIMUM_LOAD -> {
                     val maxBd = maxEntry?.value
-                    listOf(
-                        maxBd?.totalTime ?: 0.0,
-                        maxBd?.vaTime ?: 0.0,
-                        maxBd?.nnvaTime ?: 0.0,
-                        maxBd?.nvaTime ?: 0.0
-                    )
+                    listOf(maxBd?.totalTime ?: 0.0, maxBd?.vaTime ?: 0.0, maxBd?.nnvaTime ?: 0.0, maxBd?.nvaTime ?: 0.0)
                 }
                 YamazumiMode.MODEL_SPECIFIC -> {
-                    val targetModelId = _selectedModelId.value ?: projectModels.firstOrNull()?.id ?: ""
+                    val targetModelId = selectedModelId ?: projectModels.firstOrNull()?.id ?: ""
                     val targetBd = breakdowns[targetModelId]
-                    listOf(
-                        targetBd?.totalTime ?: 0.0,
-                        targetBd?.vaTime ?: 0.0,
-                        targetBd?.nnvaTime ?: 0.0,
-                        targetBd?.nvaTime ?: 0.0
-                    )
+                    listOf(targetBd?.totalTime ?: 0.0, targetBd?.vaTime ?: 0.0, targetBd?.nnvaTime ?: 0.0, targetBd?.nvaTime ?: 0.0)
                 }
             }
 
@@ -183,7 +182,6 @@ class YamazumiViewModel : ViewModel() {
             val nvaPct = if (displayTotal > 0) (displayNva / displayTotal) * 100.0 else 0.0
             val idle = max(0.0, takt - displayTotal)
             val util = if (takt > 0) (displayTotal / takt) * 100.0 else 0.0
-            val be = if (takt > 0) (displayTotal / takt) * 100.0 else 0.0
 
             StationYamazumiMetrics(
                 station = station,
@@ -200,36 +198,20 @@ class YamazumiViewModel : ViewModel() {
                 maxCt = maxTotal,
                 maxModelName = maxModelName,
                 nnvaPercent = nnvaPct,
-                balanceEfficiency = be,
+                balanceEfficiency = util,
                 modelBreakdowns = breakdowns
             )
         }
-        _metrics.value = newMetrics
-
-        _selectedStation.value?.let { current ->
-            _selectedStation.value = newMetrics.find { it.station.id == current.station.id }
-        }
     }
 
-    fun selectStation(stationId: String?) {
-        if (stationId == null) {
-            _selectedStation.value = null
-        } else {
-            _selectedStation.value = _metrics.value.find { it.station.id == stationId }
-        }
-    }
-
-    fun updateElementClassification(elementId: String, classification: ValueClassification, wasteCategory: WasteCategory, reason: String) {
-        val index = repository.workElements.indexOfFirst { it.id == elementId }
-        if (index != -1) {
-            val el = repository.workElements[index]
-            repository.workElements[index] = el.copy(
+    fun updateElementClassification(element: WorkElement, classification: ValueClassification, wasteCategory: WasteCategory, reason: String) {
+        viewModelScope.launch {
+            repository.insertWorkElement(element.copy(
                 valueClassification = classification,
                 wasteCategory = wasteCategory,
                 classificationReason = reason,
                 ieOverridden = true
-            )
-            loadData()
+            ))
         }
     }
 }

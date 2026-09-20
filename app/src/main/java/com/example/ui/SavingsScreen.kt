@@ -25,7 +25,7 @@ fun SavingsScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(Unit) {
-        viewModel.loadSavingsData()
+        // Initialized in AppShell
     }
 
     Scaffold(

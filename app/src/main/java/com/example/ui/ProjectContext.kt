@@ -1,22 +1,48 @@
 package com.example.ui
 
 import androidx.lifecycle.ViewModel
-import com.example.data.ManufacturingRepository
-import com.example.data.Project
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import androidx.lifecycle.viewModelScope
+import com.example.data.*
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 
-class ProjectViewModel : ViewModel() {
-    private val repository = ManufacturingRepository.getInstance()
+class ProjectViewModel(private val repository: ManufacturingRepository) : ViewModel() {
     
-    private val _projects = MutableStateFlow(repository.projects)
-    val projects: StateFlow<List<Project>> = _projects.asStateFlow()
+    val projects: StateFlow<List<Project>> = repository.getAllProjects()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _currentProject = MutableStateFlow(repository.projects.first())
-    val currentProject: StateFlow<Project> = _currentProject.asStateFlow()
+    private val _currentProject = MutableStateFlow<Project?>(null)
+    val currentProject: StateFlow<Project?> = _currentProject.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            // Automatically select first project if available and none selected
+            projects.collectLatest { list ->
+                if (_currentProject.value == null && list.isNotEmpty()) {
+                    _currentProject.value = list.first()
+                }
+            }
+        }
+    }
 
     fun selectProject(project: Project) {
         _currentProject.value = project
+    }
+
+    fun selectProjectById(id: String) {
+        viewModelScope.launch {
+            projects.value.find { it.id == id }?.let {
+                _currentProject.value = it
+            }
+        }
+    }
+
+    fun createProject(project: Project) {
+        viewModelScope.launch {
+            repository.insertProject(project)
+            if (_currentProject.value == null) {
+                _currentProject.value = project
+            }
+        }
     }
 }

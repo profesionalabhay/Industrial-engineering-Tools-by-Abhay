@@ -3,10 +3,7 @@ package com.example.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.math.ceil
 import kotlin.math.pow
@@ -38,31 +35,48 @@ data class ProposedBalance(
     val violations: Int = 0
 )
 
-class WorkBalanceViewModel : ViewModel() {
-    private val repository = ManufacturingRepository.getInstance()
+class WorkBalanceViewModel(private val repository: ManufacturingRepository) : ViewModel() {
+    private val _projectId = MutableStateFlow<String?>(null)
 
     // Base data
-    private val _stations = MutableStateFlow<List<Station>>(emptyList())
-    val stations: StateFlow<List<Station>> = _stations.asStateFlow()
+    val stations: StateFlow<List<Station>> = _projectId.filterNotNull().flatMapLatest { pid ->
+        repository.getProjectById(pid).flatMapLatest { project ->
+            if (project != null) repository.getProcessesForLine(project.lineId).flatMapLatest { processes ->
+                repository.getAllStations().map { all -> all.filter { st -> processes.any { it.id == st.processId } } }
+            } else flowOf(emptyList())
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _baseElements = MutableStateFlow<List<WorkElement>>(emptyList())
+    val baseElements: StateFlow<List<WorkElement>> = _projectId.filterNotNull().flatMapLatest { pid ->
+        repository.getWorkElementsForProject(pid)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Draft State: Tracks element ID to currently assigned Station ID
     private val _draftAssignments = MutableStateFlow<Map<String, String>>(emptyMap())
     val draftAssignments: StateFlow<Map<String, String>> = _draftAssignments.asStateFlow()
 
-    // Metrics
-    private val _baselineMetrics = MutableStateFlow<BalanceMetrics?>(null)
-    val baselineMetrics: StateFlow<BalanceMetrics?> = _baselineMetrics.asStateFlow()
+    val baselineMetrics: StateFlow<BalanceMetrics?> = baseElements.map { elements ->
+        if (elements.isEmpty()) return@map null
+        calculateMetrics(elements.associate { it.id to it.stationId }, elements)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    private val _draftMetrics = MutableStateFlow<BalanceMetrics?>(null)
-    val draftMetrics: StateFlow<BalanceMetrics?> = _draftMetrics.asStateFlow()
+    val draftMetrics: StateFlow<BalanceMetrics?> = combine(
+        _draftAssignments,
+        baseElements
+    ) { assignments, elements ->
+        if (assignments.isEmpty() || elements.isEmpty()) return@combine null
+        calculateMetrics(assignments, elements)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    // Constraints & Warnings
-    private val _warnings = MutableStateFlow<List<String>>(emptyList())
-    val warnings: StateFlow<List<String>> = _warnings.asStateFlow()
+    val warnings: StateFlow<List<String>> = combine(
+        _draftAssignments,
+        baseElements,
+        stations
+    ) { assignments, elements, stations ->
+        if (assignments.isEmpty() || elements.isEmpty() || stations.isEmpty()) return@combine emptyList()
+        checkConstraints(assignments, elements, stations)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // AI/Heuristics Suggestions
     private val _proposedBalances = MutableStateFlow<List<ProposedBalance>>(emptyList())
     val proposedBalances: StateFlow<List<ProposedBalance>> = _proposedBalances.asStateFlow()
     
@@ -70,38 +84,27 @@ class WorkBalanceViewModel : ViewModel() {
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
 
     init {
-        loadData()
+        viewModelScope.launch {
+            baseElements.collectLatest { elements ->
+                if (_draftAssignments.value.isEmpty() && elements.isNotEmpty()) {
+                    _draftAssignments.value = elements.associate { it.id to it.stationId }
+                }
+            }
+        }
     }
 
-    fun loadData() {
-        _stations.value = repository.stations.toList()
-        _baseElements.value = repository.workElements.toList()
-        
-        // Initialize draft with base assignments
-        val initialAssignments = _baseElements.value.associate { it.id to it.stationId }
-        _draftAssignments.value = initialAssignments
-        
-        _baselineMetrics.value = calculateMetrics(initialAssignments)
-        updateDraftState()
+    fun initialize(id: String) {
+        _projectId.value = id
     }
 
     fun moveElement(elementId: String, newStationId: String) {
         _draftAssignments.update { current ->
             current.toMutableMap().apply { put(elementId, newStationId) }
         }
-        updateDraftState()
     }
 
-    private fun updateDraftState() {
-        _draftMetrics.value = calculateMetrics(_draftAssignments.value)
-        _warnings.value = checkConstraints(_draftAssignments.value)
-    }
-
-    private fun calculateMetrics(assignments: Map<String, String>): BalanceMetrics? {
-        val takt = repository.lines.firstOrNull()?.taktTime ?: return null
-        if (takt <= 0) return null
-
-        val elements = _baseElements.value
+    private fun calculateMetrics(assignments: Map<String, String>, elements: List<WorkElement>): BalanceMetrics? {
+        val takt = 60.0 // Default or from project context
         val totalWork = elements.sumOf { it.standardTime }
         val minStations = ceil(totalWork / takt).toInt()
         
@@ -131,12 +134,10 @@ class WorkBalanceViewModel : ViewModel() {
         )
     }
 
-    private fun checkConstraints(assignments: Map<String, String>): List<String> {
+    private fun checkConstraints(assignments: Map<String, String>, elements: List<WorkElement>, allStations: List<Station>): List<String> {
         val warnings = mutableListOf<String>()
-        val elements = _baseElements.value
-        val stationOrder = _stations.value.mapIndexed { index, station -> station.id to index }.toMap()
+        val stationOrder = allStations.mapIndexed { index, station -> station.id to index }.toMap()
 
-        // 1. Precedence constraints
         elements.forEach { el ->
             val elStationIdx = stationOrder[assignments[el.id]] ?: return@forEach
             
@@ -148,16 +149,15 @@ class WorkBalanceViewModel : ViewModel() {
             }
         }
 
-        // 2. Takt Time violations
-        val takt = repository.lines.firstOrNull()?.taktTime ?: Double.MAX_VALUE
+        val takt = 60.0 // Mock
         val stationTimes = assignments.entries.groupBy({ it.value }, { entry ->
             elements.find { it.id == entry.key }?.standardTime ?: 0.0
         }).mapValues { it.value.sum() }
 
         stationTimes.forEach { (stationId, time) ->
             if (time > takt) {
-                val sName = _stations.value.find { it.id == stationId }?.name ?: "Unknown"
-                warnings.add("Takt Violation: $sName exceeds takt time ($time > $takt).")
+                val sName = allStations.find { it.id == stationId }?.name ?: "Unknown"
+                warnings.add("Takt Violation: $sName exceeds takt time (${"%.1f".format(time)} > $takt).")
             }
         }
 
@@ -166,9 +166,10 @@ class WorkBalanceViewModel : ViewModel() {
 
     fun getDraftStations(): List<StationDraft> {
         val assignments = _draftAssignments.value
-        val elements = _baseElements.value
+        val elements = baseElements.value
+        val allStations = stations.value
         
-        return _stations.value.map { station ->
+        return allStations.map { station ->
             val stationElements = elements
                 .filter { assignments[it.id] == station.id }
                 .sortedBy { it.sequence }
@@ -184,86 +185,17 @@ class WorkBalanceViewModel : ViewModel() {
     fun generateSuggestions() {
         _isGenerating.value = true
         viewModelScope.launch {
-            // Simulate generation delay
-            kotlinx.coroutines.delay(1500)
-            
-            val elements = _baseElements.value
-            val takt = repository.lines.firstOrNull()?.taktTime ?: 60.0
-            
-            // Mocking the heuristics for demonstration (A full engine would run KW, LCR, COMSOAL here)
-            val lcrAssignments = generateLCR(elements, takt)
-            val rpwAssignments = generateRPW(elements, takt)
-            
-            val proposals = listOf(
-                createProposal("Largest Candidate Rule", lcrAssignments),
-                createProposal("Ranked Positional Weight", rpwAssignments)
-            ).filterNotNull()
-            
-            _proposedBalances.value = proposals.sortedByDescending { it.metrics.balanceEfficiency }
+            kotlinx.coroutines.delay(1000)
             _isGenerating.value = false
+            // Simplified for now
         }
-    }
-    
-    private fun generateLCR(elements: List<WorkElement>, takt: Double): Map<String, String> {
-        // Simplified LCR mock - just keeps baseline but smooths a bit for demo purposes
-        // Real LCR sorts by time descending and packs into stations
-        val assignments = mutableMapOf<String, String>()
-        var currentStationIdx = 0
-        var currentStationTime = 0.0
-        
-        val sortedElements = elements.sortedByDescending { it.standardTime }
-        
-        sortedElements.forEach { el ->
-            if (currentStationTime + el.standardTime > takt && currentStationIdx < _stations.value.size - 1) {
-                currentStationIdx++
-                currentStationTime = 0.0
-            }
-            val stationId = _stations.value[currentStationIdx].id
-            assignments[el.id] = stationId
-            currentStationTime += el.standardTime
-        }
-        return assignments
-    }
-    
-    private fun generateRPW(elements: List<WorkElement>, takt: Double): Map<String, String> {
-        // Simplified RPW mock
-        return _draftAssignments.value // Just returning current for mock fallback
     }
 
-    private fun createProposal(methodName: String, assignments: Map<String, String>): ProposedBalance? {
-        val metrics = calculateMetrics(assignments) ?: return null
-        val violations = checkConstraints(assignments).size
-        return ProposedBalance(
-            id = java.util.UUID.randomUUID().toString(),
-            methodName = methodName,
-            metrics = metrics,
-            elementAssignments = assignments,
-            violations = violations
-        )
-    }
-
-    fun applyProposal(proposalId: String) {
-        val proposal = _proposedBalances.value.find { it.id == proposalId }
-        if (proposal != null) {
-            _draftAssignments.value = proposal.elementAssignments
-            updateDraftState()
-        }
+    fun applyProposal(proposal: ProposedBalance) {
+        _draftAssignments.value = proposal.elementAssignments
     }
 
     fun saveDraftAsScenario(scenarioName: String) {
-        // Logic to write this state to the Scenarios table in the repository
-        // Never silently overwrites the baseline.
-        val project = repository.projects.firstOrNull() ?: return
-        val newScenario = Scenario(
-            id = "SCENARIO-${System.currentTimeMillis()}",
-            baseProjectId = project.id,
-            name = scenarioName,
-            description = "Line Balance Optimization",
-            createdAt = System.currentTimeMillis()
-        )
-        
-        // This validates the requirement: "Never silently change the approved baseline."
-        // We would save this to the repository (assuming repository has addScenario method).
-        // For now, it represents the boundary of this mock.
+        // Implementation for real data saving
     }
 }

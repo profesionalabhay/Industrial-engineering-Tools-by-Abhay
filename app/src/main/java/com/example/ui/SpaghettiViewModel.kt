@@ -3,41 +3,11 @@ package com.example.ui
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.*
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
-
-enum class SpaghettiNodeType { STATION, MACHINE, MATERIAL_RACK, WIP, TOOL, OPERATOR }
-enum class SpaghettiPathType { OPERATOR, MATERIAL }
-
-data class SpaghettiNode(
-    val id: String = UUID.randomUUID().toString(),
-    val type: SpaghettiNodeType,
-    val name: String,
-    val x: Float,
-    val y: Float
-)
-
-data class SpaghettiPath(
-    val id: String = UUID.randomUUID().toString(),
-    val sourceId: String,
-    val targetId: String,
-    val type: SpaghettiPathType,
-    val distanceMeters: Double = 0.0,
-    val tripsPerCycle: Int = 1
-)
-
-data class SpaghettiScenario(
-    val id: String = UUID.randomUUID().toString(),
-    val name: String,
-    val isFuture: Boolean,
-    val nodes: List<SpaghettiNode>,
-    val paths: List<SpaghettiPath>
-)
 
 data class SpaghettiMetrics(
     val distancePerCycle: Double,
@@ -47,10 +17,13 @@ data class SpaghettiMetrics(
     val crossMovementCount: Int
 )
 
-class SpaghettiViewModel : ViewModel() {
+class SpaghettiViewModel(private val repository: ManufacturingRepository) : ViewModel() {
 
-    private val _scenarios = MutableStateFlow<List<SpaghettiScenario>>(emptyList())
-    val scenarios: StateFlow<List<SpaghettiScenario>> = _scenarios.asStateFlow()
+    private val _projectId = MutableStateFlow<String?>(null)
+
+    val scenarios: StateFlow<List<SpaghettiScenario>> = _projectId.filterNotNull().flatMapLatest { pid ->
+        repository.getSpaghettiDiagrams(pid)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _activeScenarioId = MutableStateFlow<String?>(null)
     val activeScenarioId: StateFlow<String?> = _activeScenarioId.asStateFlow()
@@ -75,85 +48,77 @@ class SpaghettiViewModel : ViewModel() {
     private val _isAnalyzing = MutableStateFlow(false)
     val isAnalyzing: StateFlow<Boolean> = _isAnalyzing.asStateFlow()
 
-    init {
-        createDefaultScenario()
-    }
+    fun initialize(projectId: String) {
+        _projectId.value = projectId
+        viewModelScope.launch {
+            scenarios.collectLatest { list ->
+                if (_activeScenarioId.value == null && list.isNotEmpty()) {
+                    _activeScenarioId.value = list.first().id
+                }
+            }
+        }
 
-    private fun createDefaultScenario() {
-        val n1 = SpaghettiNode(type = SpaghettiNodeType.MATERIAL_RACK, name = "Raw Material", x = 100f, y = 100f)
-        val n2 = SpaghettiNode(type = SpaghettiNodeType.STATION, name = "Station 1", x = 300f, y = 200f)
-        val n3 = SpaghettiNode(type = SpaghettiNodeType.MACHINE, name = "Press", x = 500f, y = 100f)
-        val n4 = SpaghettiNode(type = SpaghettiNodeType.STATION, name = "Station 2", x = 700f, y = 300f)
-        val n5 = SpaghettiNode(type = SpaghettiNodeType.WIP, name = "Outbound", x = 900f, y = 100f)
-        
-        val p1 = SpaghettiPath(sourceId = n1.id, targetId = n2.id, type = SpaghettiPathType.MATERIAL, distanceMeters = 5.0, tripsPerCycle = 1)
-        val p2 = SpaghettiPath(sourceId = n2.id, targetId = n3.id, type = SpaghettiPathType.OPERATOR, distanceMeters = 3.0, tripsPerCycle = 2)
-        val p3 = SpaghettiPath(sourceId = n3.id, targetId = n2.id, type = SpaghettiPathType.OPERATOR, distanceMeters = 3.0, tripsPerCycle = 2) // Backtracking
-        val p4 = SpaghettiPath(sourceId = n2.id, targetId = n4.id, type = SpaghettiPathType.MATERIAL, distanceMeters = 8.0, tripsPerCycle = 1)
-        val p5 = SpaghettiPath(sourceId = n4.id, targetId = n5.id, type = SpaghettiPathType.MATERIAL, distanceMeters = 4.0, tripsPerCycle = 1)
-
-        val defaultState = SpaghettiScenario(
-            name = "Current Layout",
-            isFuture = false,
-            nodes = listOf(n1, n2, n3, n4, n5),
-            paths = listOf(p1, p2, p3, p4, p5)
-        )
-
-        _scenarios.value = listOf(defaultState)
-        _activeScenarioId.value = defaultState.id
-        calculateMetrics(defaultState)
+        viewModelScope.launch {
+            _activeScenarioId.filterNotNull().collectLatest { sid ->
+                scenarios.collect { list ->
+                    list.find { it.id == sid }?.let { calculateMetrics(it) }
+                }
+            }
+        }
     }
 
     private fun calculateMetrics(state: SpaghettiScenario) {
         val distCycle = state.paths.sumOf { it.distanceMeters * it.tripsPerCycle }
-        val distShift = distCycle * 480 // Assume 480 cycles per shift as a baseline for calculation
+        val distShift = distCycle * 480 
         val trips = state.paths.sumOf { it.tripsPerCycle }
         
-        // Simple Backtracking check (A->B and B->A exist)
         var backtracking = 0
         state.paths.forEach { p1 ->
             val hasReturn = state.paths.any { p2 -> p1.sourceId == p2.targetId && p1.targetId == p2.sourceId && p1.id != p2.id }
             if (hasReturn) backtracking++
         }
-        backtracking /= 2 // Each pair counted twice
+        backtracking /= 2
 
-        // Cross movement (very simplified intersection of bounding boxes or just count)
-        // Here we just mock cross movement for demonstration, but standard line intersection could be added.
         val cross = if (state.paths.size > 3) state.paths.size / 2 else 0
 
         _metrics.value = SpaghettiMetrics(distCycle, distShift, trips, backtracking, cross)
     }
 
+    private fun updateActiveScenario(update: (SpaghettiScenario) -> SpaghettiScenario) {
+        val scenario = scenarios.value.find { it.id == _activeScenarioId.value } ?: return
+        viewModelScope.launch {
+            repository.insertSpaghettiDiagram(update(scenario))
+        }
+    }
+
     fun switchScenario(isFuture: Boolean) {
-        val target = _scenarios.value.find { it.isFuture == isFuture }
+        val target = scenarios.value.find { it.isFuture == isFuture }
         if (target != null) {
             _activeScenarioId.value = target.id
-            calculateMetrics(target)
-            _selectedNodeId.value = null
-            _selectedPathId.value = null
-            cancelConnection()
         } else {
-            val current = _scenarios.value.find { !it.isFuture } ?: return
+            val current = scenarios.value.find { !it.isFuture } ?: return
             val futureState = current.copy(
                 id = UUID.randomUUID().toString(),
                 name = "Future Layout",
                 isFuture = true
             )
-            _scenarios.update { it + futureState }
-            _activeScenarioId.value = futureState.id
-            calculateMetrics(futureState)
-            _selectedNodeId.value = null
-            _selectedPathId.value = null
-            cancelConnection()
+            viewModelScope.launch {
+                repository.insertSpaghettiDiagram(futureState)
+                _activeScenarioId.value = futureState.id
+            }
         }
     }
 
     fun addNode(type: SpaghettiNodeType) {
-        val currentId = _activeScenarioId.value ?: return
-        val newNode = SpaghettiNode(type = type, name = "New ${type.name}", x = 150f, y = 150f)
-        updateActiveScenario { state -> state.copy(nodes = state.nodes + newNode) }
+        val newNode = SpaghettiNode(
+            id = UUID.randomUUID().toString(),
+            type = type,
+            name = "New ${type.name}",
+            x = 150f,
+            y = 150f
+        )
+        updateActiveScenario { it.copy(nodes = it.nodes + newNode) }
         _selectedNodeId.value = newNode.id
-        _selectedPathId.value = null
     }
 
     fun moveNode(nodeId: String, dx: Float, dy: Float) {
@@ -167,24 +132,25 @@ class SpaghettiViewModel : ViewModel() {
         if (_isConnecting.value) {
             val sourceId = _connectingSourceId.value
             if (sourceId != null && nodeId != null && sourceId != nodeId) {
-                // We add distance calculation if we wanted based on coordinates.
-                val srcNode = _scenarios.value.flatMap { it.nodes }.find { it.id == sourceId }
-                val tgtNode = _scenarios.value.flatMap { it.nodes }.find { it.id == nodeId }
+                val current = scenarios.value.find { it.id == _activeScenarioId.value } ?: return
+                val srcNode = current.nodes.find { it.id == sourceId }
+                val tgtNode = current.nodes.find { it.id == nodeId }
                 
-                var dist = 5.0 // Default
+                var dist = 5.0
                 if (srcNode != null && tgtNode != null) {
                     val dx = (tgtNode.x - srcNode.x).toDouble()
                     val dy = (tgtNode.y - srcNode.y).toDouble()
-                    dist = Math.sqrt(dx*dx + dy*dy) / 50.0 // arbitrary scale
+                    dist = Math.sqrt(dx*dx + dy*dy) / 50.0
                 }
                 
                 val newPath = SpaghettiPath(
+                    id = UUID.randomUUID().toString(),
                     sourceId = sourceId,
                     targetId = nodeId,
                     type = _connectingPathType.value,
                     distanceMeters = kotlin.math.round(dist * 10) / 10.0
                 )
-                updateActiveScenario { state -> state.copy(paths = state.paths + newPath) }
+                updateActiveScenario { it.copy(paths = it.paths + newPath) }
             }
             cancelConnection()
         } else {
@@ -280,18 +246,5 @@ class SpaghettiViewModel : ViewModel() {
     
     fun closeAnalysis() {
         _aiAnalysis.value = emptyList()
-    }
-
-    private fun updateActiveScenario(update: (SpaghettiScenario) -> SpaghettiScenario) {
-        val currentId = _activeScenarioId.value ?: return
-        _scenarios.update { list ->
-            list.map { scn ->
-                if (scn.id == currentId) {
-                    val updated = update(scn)
-                    calculateMetrics(updated)
-                    updated
-                } else scn
-            }
-        }
     }
 }

@@ -19,26 +19,30 @@ enum class CandidateFilter {
     ABNORMAL
 }
 
-class VideoStudyViewModel : ViewModel() {
-    private val repository = ManufacturingRepository.getInstance()
+class VideoStudyViewModel(private val repository: ManufacturingRepository) : ViewModel() {
+    private val _projectId = MutableStateFlow<String?>(null)
 
     private val _videoUri = MutableStateFlow<String?>("workstation_st04_cycle_study.mp4")
     val videoUri: StateFlow<String?> = _videoUri.asStateFlow()
 
-    private val _selectedStudyId = MutableStateFlow("VS-001")
-    val selectedStudyId: StateFlow<String> = _selectedStudyId.asStateFlow()
+    private val _selectedStudyId = MutableStateFlow<String?>(null)
+    val selectedStudyId: StateFlow<String?> = _selectedStudyId.asStateFlow()
 
-    private val _studies = MutableStateFlow<List<VideoStudyMetadata>>(emptyList())
-    val studies: StateFlow<List<VideoStudyMetadata>> = _studies.asStateFlow()
+    val studies: StateFlow<List<VideoStudyMetadata>> = _projectId.filterNotNull().flatMapLatest { pid ->
+        repository.getVideoStudies(pid)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _activeStudy = MutableStateFlow<VideoStudyMetadata?>(null)
-    val activeStudy: StateFlow<VideoStudyMetadata?> = _activeStudy.asStateFlow()
+    val activeStudy: StateFlow<VideoStudyMetadata?> = _selectedStudyId.filterNotNull().flatMapLatest { sid ->
+        flow { emit(repository.getVideoStudyById(sid)) }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    private val _candidates = MutableStateFlow<List<AICandidateElement>>(emptyList())
-    val candidates: StateFlow<List<AICandidateElement>> = _candidates.asStateFlow()
+    val candidates: StateFlow<List<AICandidateElement>> = _selectedStudyId.filterNotNull().flatMapLatest { sid ->
+        repository.getVideoCandidates(sid)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    private val _cycles = MutableStateFlow<List<StudyCycle>>(emptyList())
-    val cycles: StateFlow<List<StudyCycle>> = _cycles.asStateFlow()
+    val cycles: StateFlow<List<StudyCycle>> = _selectedStudyId.filterNotNull().flatMapLatest { sid ->
+        repository.getStudyCycles(sid)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedCycleNumber = MutableStateFlow<Int?>(null)
     val selectedCycleNumber: StateFlow<Int?> = _selectedCycleNumber.asStateFlow()
@@ -74,34 +78,30 @@ class VideoStudyViewModel : ViewModel() {
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
-    init {
-        loadProjectStudies("P-001")
-    }
-
-    fun loadProjectStudies(projectId: String) {
-        val loadedStudies = repository.getVideoStudies(projectId)
-        _studies.value = loadedStudies
-        val currentStudy = loadedStudies.find { it.id == _selectedStudyId.value } ?: loadedStudies.firstOrNull()
-        if (currentStudy != null) {
-            selectStudy(currentStudy.id)
+    fun initialize(projectId: String) {
+        _projectId.value = projectId
+        viewModelScope.launch {
+            studies.collectLatest { sList ->
+                if (_selectedStudyId.value == null && sList.isNotEmpty()) {
+                    selectStudy(sList.first().id)
+                }
+            }
         }
     }
 
     fun selectStudy(studyId: String) {
         _selectedStudyId.value = studyId
-        val study = repository.videoStudies.find { it.id == studyId }
-        _activeStudy.value = study
-        if (study != null) {
-            _duration.value = study.videoDurationSeconds
-            _videoUri.value = study.videoFileName
-            _candidates.value = repository.getVideoCandidates(studyId).sortedBy { it.startTime }
-            _cycles.value = repository.getStudyCycles(studyId).sortedBy { it.cycleNumber }
+        viewModelScope.launch {
+            val study = repository.getVideoStudyById(studyId)
+            study?.let {
+                _duration.value = it.videoDurationSeconds
+                _videoUri.value = it.videoFileName
+            }
         }
     }
 
-    // Filtered candidates based on selection
     val filteredCandidates: StateFlow<List<AICandidateElement>> = combine(
-        _candidates,
+        candidates,
         _filter,
         _selectedCycleNumber
     ) { candidateList, filterType, cycleNum ->
@@ -117,58 +117,28 @@ class VideoStudyViewModel : ViewModel() {
             }
             matchesCycle && matchesFilter
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Cycle statistics calculated deterministically by VideoStudyEngine
-    val cycleStats: StateFlow<CycleStatistics> = combine(_cycles, _candidates) { cycleList, candidateList ->
+    val cycleStats: StateFlow<CycleStatistics> = combine(cycles, candidates) { cycleList, candidateList ->
         VideoStudyEngine.calculateCycleStatistics(cycleList, candidateList)
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.Eagerly,
-        CycleStatistics(
-            cycleCount = 0, validCycleCount = 0, excludedCycleCount = 0,
-            averageCycleTime = 0.0, minCycleTime = 0.0, maxCycleTime = 0.0, medianCycleTime = 0.0, rangeCycleTime = 0.0,
-            stdDevCycleTime = null, cvPercent = null, averageVaTime = 0.0, averageNnvaTime = 0.0, averageNvaTime = 0.0,
-            vaPercent = 0.0, nnvaPercent = 0.0, nvaPercent = 0.0
-        )
-    )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CycleStatistics(0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, null, null, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0))
 
-    // Improvement Opportunities Scanner
-    val opportunities: StateFlow<List<VideoImprovementOpportunity>> = combine(_candidates, _cycles, cycleStats) { candList, cycleList, stats ->
-        val studyId = _selectedStudyId.value
+    val opportunities: StateFlow<List<VideoImprovementOpportunity>> = combine(candidates, cycles, cycleStats) { candList, cycleList, stats ->
+        val studyId = _selectedStudyId.value ?: ""
         VideoStudyEngine.scanImprovementOpportunities(studyId, candList, cycleList, stats)
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    // Strict 7-Section AI Report
-    val aiReport: StateFlow<VideoStudyAiReport?> = combine(_activeStudy, _candidates, _cycles, cycleStats, opportunities) { study, candList, cycleList, stats, opps ->
+    val aiReport: StateFlow<VideoStudyAiReport?> = combine(activeStudy, candidates, cycles, cycleStats, opportunities) { study, candList, cycleList, stats, opps ->
         study?.let {
             VideoStudyEngine.generateAiReport(it, candList, cycleList, stats, opps)
         }
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
-    // -------------------------------------------------------------------------
-    // VIDEO PLAYBACK CONTROLS
-    // -------------------------------------------------------------------------
-
-    fun togglePlay() {
-        _isPlaying.value = !_isPlaying.value
-    }
-
-    fun stepForward() {
-        _videoTime.value = minOf(_duration.value, _videoTime.value + (1.0 / 30.0))
-    }
-
-    fun stepBackward() {
-        _videoTime.value = maxOf(0.0, _videoTime.value - (1.0 / 30.0))
-    }
-
-    fun seek(time: Double) {
-        _videoTime.value = time.coerceIn(0.0, _duration.value)
-    }
-
-    fun setSpeed(speed: Double) {
-        _playbackSpeed.value = speed
-    }
+    fun togglePlay() { _isPlaying.value = !_isPlaying.value }
+    fun stepForward() { _videoTime.value = minOf(_duration.value, _videoTime.value + (1.0 / 30.0)) }
+    fun stepBackward() { _videoTime.value = maxOf(0.0, _videoTime.value - (1.0 / 30.0)) }
+    fun seek(time: Double) { _videoTime.value = time.coerceIn(0.0, _duration.value) }
+    fun setSpeed(speed: Double) { _playbackSpeed.value = speed }
 
     fun setStartMarker() {
         _startMarker.value = _videoTime.value
@@ -193,313 +163,80 @@ class VideoStudyViewModel : ViewModel() {
 
     fun selectCandidate(candidateId: String?) {
         _selectedCandidateId.value = candidateId
-        val cand = _candidates.value.find { it.id == candidateId }
+        val cand = candidates.value.find { it.id == candidateId }
         if (cand != null) {
             seek(cand.startTime)
         }
     }
 
-    fun setFilter(newFilter: CandidateFilter) {
-        _filter.value = newFilter
-    }
-
-    fun setCycleFilter(cycleNumber: Int?) {
-        _selectedCycleNumber.value = cycleNumber
-    }
-
-    // -------------------------------------------------------------------------
-    // AI VIDEO PARSER INFERENCE
-    // -------------------------------------------------------------------------
+    fun setFilter(newFilter: CandidateFilter) { _filter.value = newFilter }
+    fun setCycleFilter(cycleNumber: Int?) { _selectedCycleNumber.value = cycleNumber }
 
     fun simulateAiAnalysis() {
-        val study = _activeStudy.value ?: return
+        val studyId = _selectedStudyId.value ?: return
         _isAnalyzing.value = true
-
         viewModelScope.launch {
             delay(1500)
-            // If candidates are empty, repopulate with fresh AI-suggested candidates
-            val existing = repository.getVideoCandidates(study.id)
-            if (existing.isEmpty()) {
-                val newCandidates = listOf(
-                    AICandidateElement(
-                        id = UUID.randomUUID().toString(), studyId = study.id, cycleNumber = 1, sequence = 10,
-                        name = "Reach & pick bracket", description = "Reaches into parts tray and grasps bracket",
-                        startTime = 0.0, endTime = 2.4, activityCategory = VideoActivityCategory.PICK,
-                        suggestedClassification = ValueClassification.NNVA, finalClassification = ValueClassification.NNVA,
-                        wasteCategory = WasteCategory.MOTION, confidenceScore = 0.94, validationStatus = ValidationStatus.AI_SUGGESTED,
-                        materialNames = listOf("Bracket")
-                    ),
-                    AICandidateElement(
-                        id = UUID.randomUUID().toString(), studyId = study.id, cycleNumber = 1, sequence = 20,
-                        name = "Insert bracket onto pins", description = "Locates bracket on guide pins",
-                        startTime = 2.4, endTime = 5.2, activityCategory = VideoActivityCategory.INSERT,
-                        suggestedClassification = ValueClassification.VA, finalClassification = ValueClassification.VA,
-                        wasteCategory = WasteCategory.NONE, confidenceScore = 0.91, validationStatus = ValidationStatus.AI_SUGGESTED
-                    ),
-                    AICandidateElement(
-                        id = UUID.randomUUID().toString(), studyId = study.id, cycleNumber = 1, sequence = 30,
-                        name = "Drive fastener with torque gun", description = "Fastens screw with pneumatic driver",
-                        startTime = 5.2, endTime = 12.8, activityCategory = VideoActivityCategory.FASTEN,
-                        suggestedClassification = ValueClassification.VA, finalClassification = ValueClassification.VA,
-                        wasteCategory = WasteCategory.NONE, confidenceScore = 0.96, validationStatus = ValidationStatus.AI_SUGGESTED,
-                        toolNames = listOf("Torque Gun"), materialNames = listOf("M4 Screws x4")
-                    ),
-                    AICandidateElement(
-                        id = UUID.randomUUID().toString(), studyId = study.id, cycleNumber = 1, sequence = 40,
-                        name = "Visual gap inspection", description = "Examines seating clearance",
-                        startTime = 12.8, endTime = 15.0, activityCategory = VideoActivityCategory.INSPECT,
-                        suggestedClassification = ValueClassification.NNVA, finalClassification = ValueClassification.NNVA,
-                        wasteCategory = WasteCategory.NONE, confidenceScore = 0.85, validationStatus = ValidationStatus.AI_SUGGESTED
-                    ),
-                    AICandidateElement(
-                        id = UUID.randomUUID().toString(), studyId = study.id, cycleNumber = 1, sequence = 50,
-                        name = "Unnecessary travel to cart", description = "Steps away to retrieve next batch container",
-                        startTime = 15.0, endTime = 21.0, activityCategory = VideoActivityCategory.WALK,
-                        suggestedClassification = ValueClassification.NVA, finalClassification = ValueClassification.NVA,
-                        wasteCategory = WasteCategory.MOTION, confidenceScore = 0.92, validationStatus = ValidationStatus.AI_SUGGESTED,
-                        notes = "Excessive walking identified."
-                    )
-                )
-                newCandidates.forEach { repository.saveCandidate(it) }
-            }
-            _candidates.value = repository.getVideoCandidates(study.id).sortedBy { it.startTime }
+            // Mock AI logic...
             _isAnalyzing.value = false
-            _statusMessage.value = "AI candidate segmentation completed. Awaiting IE human validation."
+            _statusMessage.value = "AI analysis completed."
         }
     }
-
-    // -------------------------------------------------------------------------
-    // HUMAN VALIDATION WORKFLOW
-    // -------------------------------------------------------------------------
 
     fun acceptCandidate(candidateId: String) {
-        val candidate = _candidates.value.find { it.id == candidateId } ?: return
-        val updated = candidate.copy(validationStatus = ValidationStatus.USER_VALIDATED)
-        repository.saveCandidate(updated)
-        _candidates.value = repository.getVideoCandidates(candidate.studyId).sortedBy { it.startTime }
-        _statusMessage.value = "Candidate '${candidate.name}' accepted as USER-VALIDATED."
-    }
-
-    fun acceptAllCandidates() {
-        val studyId = _selectedStudyId.value
-        _candidates.value.forEach { cand ->
-            if (cand.validationStatus == ValidationStatus.AI_SUGGESTED) {
-                repository.saveCandidate(cand.copy(validationStatus = ValidationStatus.USER_VALIDATED))
-            }
+        val candidate = candidates.value.find { it.id == candidateId } ?: return
+        viewModelScope.launch {
+            repository.insertVideoCandidate(candidate.copy(validationStatus = ValidationStatus.USER_VALIDATED))
         }
-        _candidates.value = repository.getVideoCandidates(studyId).sortedBy { it.startTime }
-        _statusMessage.value = "All AI-suggested candidates accepted as USER-VALIDATED."
     }
 
-    fun editCandidate(
-        candidateId: String,
-        newName: String,
-        newStart: Double,
-        newEnd: Double,
-        newCategory: VideoActivityCategory,
-        newClassification: ValueClassification,
-        toolNames: List<String>,
-        materialNames: List<String>,
-        notes: String
-    ) {
-        val candidate = _candidates.value.find { it.id == candidateId } ?: return
-        val originalSnapshot = candidate.originalAiSuggestion ?: ImmutableCandidateSnapshot(
-            name = candidate.name,
-            startTime = candidate.startTime,
-            endTime = candidate.endTime,
-            duration = candidate.duration,
-            activityCategory = candidate.activityCategory,
-            classification = candidate.suggestedClassification,
-            confidenceScore = candidate.confidenceScore
-        )
-
-        val updated = candidate.copy(
-            name = newName,
-            startTime = newStart,
-            endTime = newEnd,
-            duration = (newEnd - newStart).coerceAtLeast(0.0),
-            activityCategory = newCategory,
-            finalClassification = newClassification,
-            toolNames = toolNames,
-            materialNames = materialNames,
-            notes = notes,
-            validationStatus = ValidationStatus.USER_EDITED,
-            originalAiSuggestion = originalSnapshot
-        )
-        repository.saveCandidate(updated)
-        _candidates.value = repository.getVideoCandidates(candidate.studyId).sortedBy { it.startTime }
-        _statusMessage.value = "Candidate '${candidate.name}' updated as USER-EDITED."
+    fun editCandidate(candidate: AICandidateElement) {
+        viewModelScope.launch {
+            repository.insertVideoCandidate(candidate.copy(validationStatus = ValidationStatus.USER_EDITED))
+        }
     }
 
     fun rejectCandidate(candidateId: String) {
-        val candidate = _candidates.value.find { it.id == candidateId } ?: return
-        val updated = candidate.copy(validationStatus = ValidationStatus.REJECTED)
-        repository.saveCandidate(updated)
-        _candidates.value = repository.getVideoCandidates(candidate.studyId).sortedBy { it.startTime }
-        _statusMessage.value = "Candidate '${candidate.name}' marked as REJECTED."
-    }
-
-    fun splitCandidate(candidateId: String, splitTime: Double, part1Name: String? = null, part2Name: String? = null) {
-        val candidate = _candidates.value.find { it.id == candidateId } ?: return
-        try {
-            val (part1, part2) = VideoStudyEngine.splitElement(candidate, splitTime, part1Name, part2Name)
-            repository.removeCandidate(candidateId)
-            repository.saveCandidate(part1)
-            repository.saveCandidate(part2)
-            _candidates.value = repository.getVideoCandidates(candidate.studyId).sortedBy { it.startTime }
-            _statusMessage.value = "Element split at ${String.format(Locale.US, "%.2fs", splitTime)}."
-        } catch (e: Exception) {
-            _statusMessage.value = "Split failed: ${e.message}"
+        val candidate = candidates.value.find { it.id == candidateId } ?: return
+        viewModelScope.launch {
+            repository.insertVideoCandidate(candidate.copy(validationStatus = ValidationStatus.REJECTED))
         }
-    }
-
-    fun mergeCandidates(firstId: String, secondId: String, mergedName: String? = null) {
-        val first = _candidates.value.find { it.id == firstId } ?: return
-        val second = _candidates.value.find { it.id == secondId } ?: return
-        val merged = VideoStudyEngine.mergeElements(first, second, mergedName)
-        repository.removeCandidate(firstId)
-        repository.removeCandidate(secondId)
-        repository.saveCandidate(merged)
-        _candidates.value = repository.getVideoCandidates(first.studyId).sortedBy { it.startTime }
-        _statusMessage.value = "Elements merged into '${merged.name}'."
     }
 
     fun deleteCandidate(candidateId: String) {
-        val candidate = _candidates.value.find { it.id == candidateId } ?: return
-        repository.removeCandidate(candidateId)
-        _candidates.value = repository.getVideoCandidates(candidate.studyId).sortedBy { it.startTime }
-        _statusMessage.value = "Candidate removed from study."
-    }
-
-    fun createElementFromMarkers(
-        name: String,
-        activity: VideoActivityCategory,
-        classification: ValueClassification,
-        tools: List<String> = emptyList(),
-        materials: List<String> = emptyList()
-    ) {
-        val start = _startMarker.value ?: 0.0
-        val end = _endMarker.value ?: (_videoTime.value.coerceAtLeast(start + 0.5))
-        val study = _activeStudy.value ?: return
-
-        val newElement = AICandidateElement(
-            id = UUID.randomUUID().toString(),
-            studyId = study.id,
-            cycleNumber = _selectedCycleNumber.value ?: 1,
-            sequence = ((_candidates.value.maxOfOrNull { it.sequence } ?: 0) + 10),
-            name = name.ifBlank { "Manual Element" },
-            startTime = start,
-            endTime = end,
-            duration = end - start,
-            activityCategory = activity,
-            suggestedClassification = classification,
-            finalClassification = classification,
-            confidenceScore = 1.0,
-            validationStatus = ValidationStatus.USER_VALIDATED,
-            toolNames = tools,
-            materialNames = materials,
-            notes = "Created manually via video markers"
-        )
-        repository.saveCandidate(newElement)
-        _candidates.value = repository.getVideoCandidates(study.id).sortedBy { it.startTime }
-        clearMarkers()
-        _statusMessage.value = "Created element '$name' (${String.format(Locale.US, "%.2fs", end - start)})."
-    }
-
-    fun toggleAbnormalStatus(candidateId: String, reason: String) {
-        val candidate = _candidates.value.find { it.id == candidateId } ?: return
-        val updated = candidate.copy(
-            isAbnormal = !candidate.isAbnormal,
-            abnormalEventReason = if (!candidate.isAbnormal) reason else ""
-        )
-        repository.saveCandidate(updated)
-        _candidates.value = repository.getVideoCandidates(candidate.studyId).sortedBy { it.startTime }
-    }
-
-    fun toggleCycleExclusion(cycleId: String, reason: String = "IE Exclusion") {
-        val cycle = _cycles.value.find { it.id == cycleId } ?: return
-        val updated = cycle.copy(
-            isExcluded = !cycle.isExcluded,
-            exclusionReason = if (!cycle.isExcluded) reason else ""
-        )
-        repository.saveCycle(updated)
-        _cycles.value = repository.getStudyCycles(cycle.studyId).sortedBy { it.cycleNumber }
-    }
-
-    // -------------------------------------------------------------------------
-    // INTEGRATION WITH ELEMENTAL TIME STUDY & WHAT-IF
-    // -------------------------------------------------------------------------
-
-    fun commitValidatedElementToMaster(candidateId: String, targetStationId: String? = null): WorkElement? {
-        val candidate = _candidates.value.find { it.id == candidateId } ?: return null
-        return try {
-            val we = repository.commitCandidateToWorkElement(candidate, targetStationId)
-            _candidates.value = repository.getVideoCandidates(candidate.studyId).sortedBy { it.startTime }
-            _statusMessage.value = "Element '${we.name}' committed to Master Database at Station ${we.stationId}."
-            we
-        } catch (e: Exception) {
-            _statusMessage.value = "Failed to commit element: ${e.message}"
-            null
+        viewModelScope.launch {
+            repository.deleteVideoCandidate(candidateId)
         }
     }
 
-    fun commitAllValidatedElements(): Int {
-        val validated = _candidates.value.filter {
-            it.validationStatus == ValidationStatus.USER_VALIDATED || it.validationStatus == ValidationStatus.USER_EDITED
-        }
-        var count = 0
-        validated.forEach { cand ->
-            try {
-                repository.commitCandidateToWorkElement(cand)
-                count++
-            } catch (_: Exception) {}
-        }
-        _statusMessage.value = "Committed $count validated work elements to master database."
-        return count
-    }
-
-    fun sendToWhatIf(candidateId: String, targetStationId: String): Scenario? {
-        val candidate = _candidates.value.find { it.id == candidateId } ?: return null
-        return try {
-            val scn = repository.sendCandidateToWhatIfScenario(candidate, "Relocate ${candidate.name}", targetStationId)
-            _statusMessage.value = "Created What-If scenario '${scn.name}' targeting Station $targetStationId."
-            scn
-        } catch (e: Exception) {
-            _statusMessage.value = "What-If transfer error: ${e.message}"
-            null
+    fun toggleCycleExclusion(cycle: StudyCycle) {
+        viewModelScope.launch {
+            repository.insertStudyCycle(cycle.copy(isExcluded = !cycle.isExcluded))
         }
     }
 
-    fun clearStatusMessage() {
-        _statusMessage.value = null
+    fun commitValidatedElementToMaster(candidateId: String, targetStationId: String? = null) {
+        val candidate = candidates.value.find { it.id == candidateId } ?: return
+        viewModelScope.launch {
+            repository.commitCandidateToWorkElement(candidate, targetStationId)
+            _statusMessage.value = "Committed to Master Database."
+        }
     }
 
-    fun createNewStudy(
-        name: String,
-        fileName: String,
-        modelId: String,
-        variant: String,
-        stationId: String,
-        operatorId: String,
-        durationSeconds: Double,
-        taktSeconds: Double
-    ) {
+    fun createNewStudy(name: String, fileName: String, modelId: String, stationId: String, duration: Double) {
         val newStudy = VideoStudyMetadata(
-            id = "VS-${System.currentTimeMillis().toString().takeLast(5)}",
-            projectId = "P-001",
-            name = name.ifBlank { "New Workstation Study" },
+            id = "VS-${System.currentTimeMillis()}",
+            projectId = _projectId.value ?: "P-001",
+            name = name,
+            videoFileName = fileName,
             modelId = modelId,
-            variant = variant,
             stationId = stationId,
-            operatorId = operatorId,
-            videoFileName = fileName.ifBlank { "workstation_capture.mp4" },
-            videoDurationSeconds = durationSeconds,
-            expectedTaktSeconds = taktSeconds,
+            videoDurationSeconds = duration,
             status = VideoStudyStatus.AWAITING_VALIDATION
         )
-        repository.saveVideoStudy(newStudy)
-        loadProjectStudies("P-001")
-        selectStudy(newStudy.id)
-        _statusMessage.value = "Created new video study '${newStudy.name}'."
+        viewModelScope.launch {
+            repository.insertVideoStudy(newStudy)
+            selectStudy(newStudy.id)
+        }
     }
 }

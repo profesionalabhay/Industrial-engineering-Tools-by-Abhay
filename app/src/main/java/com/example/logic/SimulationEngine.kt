@@ -8,11 +8,10 @@ class SimulationEngine(private val repository: ManufacturingRepository) {
     fun runDeterministicSimulation(
         projectId: String,
         scenarioName: String,
+        stations: List<Station>,
+        projectElements: List<WorkElement>,
         durationHours: Double = 8.0
     ): SimulationResult {
-        val stations = repository.stations.filter { it.processId.startsWith("PRC") } // Simplified filter
-        val projectElements = repository.workElements.filter { it.projectId == projectId }
-        
         // Build simulation nodes
         val nodes = stations.map { station ->
             val stationElements = projectElements.filter { it.stationId == station.id }

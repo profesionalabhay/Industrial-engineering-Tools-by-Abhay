@@ -29,7 +29,7 @@ fun ManualTimeStudyScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(studyId) {
-        viewModel.loadStudy(studyId)
+        viewModel.initialize(studyId)
     }
 
     Scaffold(

@@ -3,9 +3,7 @@ package com.example.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class StandardWorkUiState(
@@ -19,22 +17,22 @@ class StandardWorkViewModel(private val repository: ManufacturingRepository) : V
     private val _uiState = MutableStateFlow(StandardWorkUiState())
     val uiState: StateFlow<StandardWorkUiState> = _uiState.asStateFlow()
 
-    fun loadStandardWork(stationId: String, modelId: String) {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            val revisions = repository.getStandardWorkRevisions(stationId, modelId)
-            
-            val current = revisions.firstOrNull()
-            val kaizen = current?.kaizenId?.let { kid -> 
-                repository.kaizenRecords.find { it.id == kid } 
-            }
+    private var dataJob: kotlinx.coroutines.Job? = null
 
-            _uiState.value = _uiState.value.copy(
-                currentRevision = current,
-                history = revisions,
-                relatedKaizen = kaizen,
-                isLoading = false
-            )
+    fun initialize(projectId: String) {
+        dataJob?.cancel()
+        dataJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            
+            repository.getStandardWorkRevisions(projectId).collect { revisions ->
+                val current = revisions.maxByOrNull { it.revisionNumber }
+                
+                _uiState.update { it.copy(
+                    currentRevision = current,
+                    history = revisions,
+                    isLoading = false
+                ) }
+            }
         }
     }
 }

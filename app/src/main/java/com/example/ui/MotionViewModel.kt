@@ -2,53 +2,49 @@ package com.example.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.data.*
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.util.UUID
 
-enum class MotionCategory(val isValueAdding: Boolean) {
-    REACH(false),
-    PICK(false),
-    PLACE(true),
-    WALK(false),
-    TURN(false),
-    BEND(false),
-    SEARCH(false),
-    WAIT(false),
-    TOOL_MOVEMENT(true),
-    MATERIAL_MOVEMENT(false),
-    INSPECTION(false), // Often NNVA
-    HOLD(false)
-}
+class MotionViewModel(private val repository: ManufacturingRepository) : ViewModel() {
+    private val _projectId = MutableStateFlow<String?>(null)
+    private val _workElementId = MutableStateFlow<String?>(null)
 
-data class MotionElement(
-    val id: String = UUID.randomUUID().toString(),
-    val category: MotionCategory,
-    val description: String,
-    val timeSec: Double
-)
-
-class MotionViewModel : ViewModel() {
-    private val _motions = MutableStateFlow<List<MotionElement>>(emptyList())
-    val motions: StateFlow<List<MotionElement>> = _motions.asStateFlow()
+    val activeStudy: StateFlow<MotionStudy?> = combine(_projectId.filterNotNull(), _workElementId.filterNotNull()) { pid, eid ->
+        repository.getMotionStudies(pid).map { list -> list.find { it.workElementId == eid } }
+    }.flatMapLatest { it }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     private val _isAnalyzingVideo = MutableStateFlow(false)
     val isAnalyzingVideo: StateFlow<Boolean> = _isAnalyzingVideo.asStateFlow()
 
-    private val _aiSuggestions = MutableStateFlow<List<MotionElement>>(emptyList())
-    val aiSuggestions: StateFlow<List<MotionElement>> = _aiSuggestions.asStateFlow()
+    private val _aiSuggestions = MutableStateFlow<List<MotionEvent>>(emptyList())
+    val aiSuggestions: StateFlow<List<MotionEvent>> = _aiSuggestions.asStateFlow()
 
-    fun addMotion(category: MotionCategory, description: String, timeSec: Double) {
-        val newMotion = MotionElement(category = category, description = description, timeSec = timeSec)
-        _motions.update { it + newMotion }
+    fun initialize(projectId: String, workElementId: String) {
+        _projectId.value = projectId
+        _workElementId.value = workElementId
+    }
+
+    fun addMotion(therblig: String, timeMs: Long) {
+        val study = activeStudy.value ?: return
+        val newEvent = MotionEvent(
+            id = UUID.randomUUID().toString(),
+            workElementId = study.workElementId,
+            therblig = therblig,
+            timeMs = timeMs
+        )
+        viewModelScope.launch {
+            repository.insertMotionStudy(study.copy(events = study.events + newEvent))
+        }
     }
 
     fun deleteMotion(id: String) {
-        _motions.update { list -> list.filter { it.id != id } }
+        val study = activeStudy.value ?: return
+        viewModelScope.launch {
+            repository.insertMotionStudy(study.copy(events = study.events.filter { it.id != id }))
+        }
     }
 
     fun analyzeVideoMock(videoDescription: String) {
@@ -57,25 +53,28 @@ class MotionViewModel : ViewModel() {
             delay(2000) // Simulate Gemini Video Analysis
             
             val suggestions = listOf(
-                MotionElement(category = MotionCategory.REACH, description = "Reach for drill on top shelf", timeSec = 1.2),
-                MotionElement(category = MotionCategory.PICK, description = "Grasp drill", timeSec = 0.5),
-                MotionElement(category = MotionCategory.TURN, description = "Turn back to workbench", timeSec = 0.8),
-                MotionElement(category = MotionCategory.WALK, description = "Walk 2 steps to assembly fixture", timeSec = 1.5),
-                MotionElement(category = MotionCategory.TOOL_MOVEMENT, description = "Drive 3 screws", timeSec = 4.2),
-                MotionElement(category = MotionCategory.PLACE, description = "Return drill to holster", timeSec = 1.0)
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "REACH", timeMs = 1200),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "GRASP", timeMs = 500),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "MOVE", timeMs = 800),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "POSITION", timeMs = 1500),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "ASSEMBLE", timeMs = 4200),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "RELEASE", timeMs = 1000)
             )
             _aiSuggestions.value = suggestions
             _isAnalyzingVideo.value = false
         }
     }
 
-    fun acceptSuggestion(motion: MotionElement) {
-        _motions.update { it + motion }
-        _aiSuggestions.update { list -> list.filter { it.id != motion.id } }
+    fun acceptSuggestion(event: MotionEvent) {
+        val study = activeStudy.value ?: return
+        viewModelScope.launch {
+            repository.insertMotionStudy(study.copy(events = study.events + event))
+            _aiSuggestions.update { list -> list.filter { it.id != event.id } }
+        }
     }
 
-    fun rejectSuggestion(motionId: String) {
-        _aiSuggestions.update { list -> list.filter { it.id != motionId } }
+    fun rejectSuggestion(eventId: String) {
+        _aiSuggestions.update { list -> list.filter { it.id != eventId } }
     }
     
     fun clearSuggestions() {

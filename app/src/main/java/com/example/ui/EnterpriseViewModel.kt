@@ -3,9 +3,7 @@ package com.example.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 data class EnterpriseUiState(
@@ -19,20 +17,27 @@ class EnterpriseViewModel(private val repository: ManufacturingRepository) : Vie
     private val _uiState = MutableStateFlow(EnterpriseUiState())
     val uiState: StateFlow<EnterpriseUiState> = _uiState.asStateFlow()
 
-    fun loadEnterpriseData() {
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
-            val kpis = repository.enterpriseKpis
-            val prod = repository.productivityRecords
-            _uiState.value = _uiState.value.copy(
-                kpis = kpis,
-                productivityRecords = prod,
-                isLoading = false
-            )
+    private var dataJob: kotlinx.coroutines.Job? = null
+
+    fun initialize() {
+        dataJob?.cancel()
+        dataJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            
+            combine(
+                repository.getEnterpriseKpis(),
+                repository.getProductivityRecords()
+            ) { kpis, prod ->
+                _uiState.update { it.copy(
+                    kpis = kpis,
+                    productivityRecords = prod,
+                    isLoading = false
+                ) }
+            }.collect()
         }
     }
 
     fun setBenchmarkMetric(metric: BenchmarkMetric) {
-        _uiState.value = _uiState.value.copy(benchmarkMetric = metric)
+        _uiState.update { it.copy(benchmarkMetric = metric) }
     }
 }

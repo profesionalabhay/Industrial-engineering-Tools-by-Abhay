@@ -22,114 +22,77 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
+import com.example.ManufacturingApplication
 import com.example.data.ManufacturingRepository
 import com.example.ui.components.*
 import com.example.ui.theme.*
 import kotlinx.coroutines.launch
+import com.example.data.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppShell() {
-    val repository = ManufacturingRepository.getInstance()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val application = context.applicationContext as ManufacturingApplication
+    val repository = application.repository
+    val factory = ViewModelFactory(repository)
+
     val navController = rememberNavController()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val projectViewModel: ProjectViewModel = viewModel()
-    val timeStudyViewModel: TimeStudyViewModel = viewModel()
-    val videoStudyViewModel: VideoStudyViewModel = viewModel()
-    val yamazumiViewModel: YamazumiViewModel = viewModel()
-    val workBalanceViewModel: WorkBalanceViewModel = viewModel()
-    val whatIfViewModel: WhatIfViewModel = viewModel()
-    val vsmViewModel: VsmViewModel = viewModel()
-    val motionViewModel: MotionViewModel = viewModel()
-    val spaghettiViewModel: SpaghettiViewModel = viewModel()
-    val capacityViewModel: CapacityViewModel = viewModel()
-    val multiModelViewModel: MultiModelViewModel = viewModel()
 
-    val oeeViewModel: OeeViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return OeeViewModel(repository) as T
-            }
-        }
-    )
-    val rcaViewModel: RcaViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return RcaViewModel(repository) as T
-            }
-        }
-    )
-    val kaizenViewModel: KaizenViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return KaizenViewModel(repository) as T
-            }
-        }
-    )
-    val standardWorkViewModel: StandardWorkViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return StandardWorkViewModel(repository) as T
-            }
-        }
-    )
-    val opexDashboardViewModel: OpExDashboardViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return OpExDashboardViewModel(repository) as T
-            }
-        }
-    )
-    val ergoViewModel: ErgoViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return ErgoViewModel(repository) as T
-            }
-        }
-    )
+    val projectViewModel: ProjectViewModel = viewModel(factory = factory)
+    val timeStudyViewModel: TimeStudyViewModel = viewModel(factory = factory)
+    val videoStudyViewModel: VideoStudyViewModel = viewModel(factory = factory)
+    val yamazumiViewModel: YamazumiViewModel = viewModel(factory = factory)
+    val workBalanceViewModel: WorkBalanceViewModel = viewModel(factory = factory)
+    val whatIfViewModel: WhatIfViewModel = viewModel(factory = factory)
+    val vsmViewModel: VsmViewModel = viewModel(factory = factory)
+    val motionViewModel: MotionViewModel = viewModel(factory = factory)
+    val spaghettiViewModel: SpaghettiViewModel = viewModel(factory = factory)
+    val capacityViewModel: CapacityViewModel = viewModel(factory = factory)
+    val multiModelViewModel: MultiModelViewModel = viewModel(factory = factory)
+    val oeeViewModel: OeeViewModel = viewModel(factory = factory)
+    val rcaViewModel: RcaViewModel = viewModel(factory = factory)
+    val kaizenViewModel: KaizenViewModel = viewModel(factory = factory)
+    val standardWorkViewModel: StandardWorkViewModel = viewModel(factory = factory)
+    val opexDashboardViewModel: OpExDashboardViewModel = viewModel(factory = factory)
+    val ergoViewModel: ErgoViewModel = viewModel(factory = factory)
+    val aiCopilotViewModel: AiCopilotViewModel = viewModel(factory = factory)
+    val manualTimeStudyViewModel: ManualTimeStudyViewModel = viewModel(factory = factory)
+    val simulationViewModel: SimulationViewModel = viewModel(factory = factory)
+    val enterpriseViewModel: EnterpriseViewModel = viewModel(factory = factory)
+    val savingsViewModel: SavingsViewModel = viewModel(factory = factory)
     
-    val aiCopilotViewModel: AiCopilotViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return AiCopilotViewModel(repository) as T
-            }
-        }
-    )
-
-    val simulationEngine = com.example.logic.SimulationEngine(repository)
-    
-    val manualTimeStudyViewModel: ManualTimeStudyViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return ManualTimeStudyViewModel(repository) as T
-            }
-        }
-    )
-
-    val simulationViewModel: SimulationViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return SimulationViewModel(repository, simulationEngine) as T
-            }
-        }
-    )
-
-    val enterpriseViewModel: EnterpriseViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return EnterpriseViewModel(repository) as T
-            }
-        }
-    )
-
-    val savingsViewModel: SavingsViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return SavingsViewModel(repository) as T
-            }
-        }
-    )
+    // Initialize ViewModels with default project
+    LaunchedEffect(Unit) {
+        val defaultProjectId = "P-001"
+        projectViewModel.selectProjectById(defaultProjectId)
+        timeStudyViewModel.initialize(defaultProjectId)
+        videoStudyViewModel.initialize(defaultProjectId)
+        yamazumiViewModel.initialize(defaultProjectId)
+        workBalanceViewModel.initialize(defaultProjectId)
+        oeeViewModel.initialize(defaultProjectId)
+        kaizenViewModel.initialize(defaultProjectId)
+        rcaViewModel.initialize(defaultProjectId)
+        opexDashboardViewModel.initialize(defaultProjectId)
+        ergoViewModel.initialize(defaultProjectId)
+        aiCopilotViewModel.initialize(defaultProjectId)
+        vsmViewModel.initialize(defaultProjectId)
+        spaghettiViewModel.initialize(defaultProjectId)
+        motionViewModel.initialize(defaultProjectId, "WE-001") 
+        multiModelViewModel.initialize(defaultProjectId)
+        whatIfViewModel.initialize(defaultProjectId)
+        savingsViewModel.initialize(defaultProjectId)
+        capacityViewModel.initialize(defaultProjectId)
+        standardWorkViewModel.initialize(defaultProjectId)
+        manualTimeStudyViewModel.initialize("VS-001")
+        simulationViewModel.initialize(defaultProjectId)
+        enterpriseViewModel.initialize()
+        
+        // Seed data if database is empty
+        repository.seedSampleData()
+    }
 
     val currentProject by projectViewModel.currentProject.collectAsState()
     val projects by projectViewModel.projects.collectAsState()

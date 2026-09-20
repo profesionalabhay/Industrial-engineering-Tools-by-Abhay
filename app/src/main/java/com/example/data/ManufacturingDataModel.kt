@@ -1,23 +1,43 @@
 package com.example.data
 
+import androidx.room.Entity
+import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
+
+@Serializable
 enum class ValueClassification { VA, NVA, NNVA }
+
+@Serializable
 enum class WasteCategory { NONE, TRANSPORTATION, INVENTORY, MOTION, WAITING, OVERPRODUCTION, OVERPROCESSING, DEFECT, SKILLS, SEARCHING, EXCESS_HANDLING, REWORK, OTHER }
+
+@Serializable
 enum class TimeSource { OBSERVED, CALCULATED, ESTIMATED }
+
+@Serializable
 enum class ElementApplicability { COMMON, MODEL_SPECIFIC, VARIANT_SPECIFIC }
 
-data class Plant(val id: String, val name: String, val location: String)
-data class Line(val id: String, val plantId: String, val name: String, val taktTime: Double? = null)
+@Entity(tableName = "plants")
+@Serializable
+data class Plant(@PrimaryKey val id: String, val name: String, val location: String)
 
+@Entity(tableName = "lines")
+@Serializable
+data class Line(@PrimaryKey val id: String, val plantId: String, val name: String, val taktTime: Double? = null)
+
+@Entity(tableName = "projects")
+@Serializable
 data class Project(
-    val id: String, 
+    @PrimaryKey val id: String, 
     val lineId: String, 
     val name: String, 
     val description: String, 
     val status: String
 )
 
+@Entity(tableName = "models")
+@Serializable
 data class Model(
-    val id: String, 
+    @PrimaryKey val id: String, 
     val projectId: String, 
     val name: String, 
     val demand: Int,
@@ -28,12 +48,22 @@ data class Model(
     init { require(demand >= 0) { "Demand cannot be negative." } }
 }
 
-data class Process(val id: String, val lineId: String, val name: String)
-data class Station(val id: String, val processId: String, val name: String)
-data class Operator(val id: String, val name: String, val skillLevel: String)
+@Entity(tableName = "processes")
+@Serializable
+data class Process(@PrimaryKey val id: String, val lineId: String, val name: String)
 
+@Entity(tableName = "stations")
+@Serializable
+data class Station(@PrimaryKey val id: String, val processId: String, val name: String)
+
+@Entity(tableName = "operators")
+@Serializable
+data class Operator(@PrimaryKey val id: String, val name: String, val skillLevel: String)
+
+@Entity(tableName = "work_elements")
+@Serializable
 data class WorkElement(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val modelId: String,
     val processId: String,
@@ -79,8 +109,10 @@ data class WorkElement(
     }
 }
 
+@Entity(tableName = "observations")
+@Serializable
 data class Observation(
-    val id: String, 
+    @PrimaryKey val id: String, 
     val workElementId: String, 
     val cycleId: String, 
     val observedTime: Double, 
@@ -91,16 +123,34 @@ data class Observation(
     init { require(observedTime >= 0) { "Observation time cannot be negative." } }
 }
 
-data class Cycle(val id: String, val workElementId: String, val cycleNumber: Int, val isOutlier: Boolean)
-data class Tool(val id: String, val name: String)
-data class Material(val id: String, val name: String, val cost: Double)
-data class Dependency(val id: String, val predecessorId: String, val successorId: String, val type: String)
-data class Classification(val id: String, val name: String, val category: String)
+@Entity(tableName = "cycles")
+@Serializable
+data class Cycle(@PrimaryKey val id: String, val workElementId: String, val cycleNumber: Int, val isOutlier: Boolean)
 
-data class Scenario(val id: String, val baseProjectId: String, val name: String, val description: String, val createdAt: Long)
+@Entity(tableName = "tools")
+@Serializable
+data class Tool(@PrimaryKey val id: String, val name: String)
 
+@Entity(tableName = "materials")
+@Serializable
+data class Material(@PrimaryKey val id: String, val name: String, val cost: Double)
+
+@Entity(tableName = "dependencies")
+@Serializable
+data class Dependency(@PrimaryKey val id: String, val predecessorId: String, val successorId: String, val type: String)
+
+@Entity(tableName = "classifications")
+@Serializable
+data class Classification(@PrimaryKey val id: String, val name: String, val category: String)
+
+@Entity(tableName = "scenarios")
+@Serializable
+data class Scenario(@PrimaryKey val id: String, val baseProjectId: String, val name: String, val description: String, val createdAt: Long)
+
+@Entity(tableName = "scenario_elements")
+@Serializable
 data class ScenarioElement(
-    val id: String,
+    @PrimaryKey val id: String,
     val scenarioId: String,
     val baseWorkElementId: String,
     val deltaObservedTime: Double?,
@@ -110,11 +160,21 @@ data class ScenarioElement(
     val deltaValueClassification: ValueClassification?
 )
 
-data class VSMProcess(val id: String, val projectId: String, val name: String, val cycleTime: Double, val changeoverTime: Double, val uptime: Double)
-data class LayoutObject(val id: String, val projectId: String, val type: String, val x: Double, val y: Double, val width: Double, val height: Double)
-data class MotionEvent(val id: String, val workElementId: String, val therblig: String, val timeMs: Long)
+@Entity(tableName = "vsm_processes")
+@Serializable
+data class VSMProcess(@PrimaryKey val id: String, val projectId: String, val name: String, val cycleTime: Double, val changeoverTime: Double, val uptime: Double)
 
-data class CapacityPlan(val id: String, val projectId: String, val demand: Int, val availableTime: Double, val taktTime: Double) {
+@Entity(tableName = "layout_objects")
+@Serializable
+data class LayoutObject(@PrimaryKey val id: String, val projectId: String, val type: String, val x: Double, val y: Double, val width: Double, val height: Double)
+
+@Entity(tableName = "motion_events")
+@Serializable
+data class MotionEvent(@PrimaryKey val id: String, val workElementId: String, val therblig: String, val timeMs: Long)
+
+@Entity(tableName = "capacity_plans")
+@Serializable
+data class CapacityPlan(@PrimaryKey val id: String, val projectId: String, val demand: Int, val availableTime: Double, val taktTime: Double) {
     init {
         require(taktTime > 0) { "Takt time must be positive." }
         require(demand > 0) { "Demand must be positive." }
@@ -122,18 +182,32 @@ data class CapacityPlan(val id: String, val projectId: String, val demand: Int, 
     }
 }
 
-data class ManpowerPlan(val id: String, val projectId: String, val requiredOperators: Int, val efficiency: Double)
-data class KaizenAction(val id: String, val workElementId: String, val title: String, val status: String, val assignedTo: String)
-data class SavingsRecord(val id: String, val kaizenId: String, val timeSavedSeconds: Double, val costSaved: Double)
-data class StandardWork(val id: String, val stationId: String, val documentUrl: String, val version: String)
-data class ErgonomicAssessment(val id: String, val workElementId: String, val rulaScore: Int, val rebaScore: Int, val riskLevel: String)
+@Entity(tableName = "manpower_plans")
+@Serializable
+data class ManpowerPlan(@PrimaryKey val id: String, val projectId: String, val requiredOperators: Int, val efficiency: Double)
+
+@Entity(tableName = "kaizen_actions")
+@Serializable
+data class KaizenAction(@PrimaryKey val id: String, val workElementId: String, val title: String, val status: String, val assignedTo: String)
+
+@Entity(tableName = "savings_records")
+@Serializable
+data class SavingsRecord(@PrimaryKey val id: String, val kaizenId: String, val timeSavedSeconds: Double, val costSaved: Double)
+
+@Entity(tableName = "standard_works")
+@Serializable
+data class StandardWork(@PrimaryKey val id: String, val stationId: String, val documentUrl: String, val version: String)
+
+// Ergonomic assessments are defined in V2.4 section as ErgoAssessment
 
 // ==========================================
 // VERSION 2.1 — MULTI-MODEL LINE BALANCING ENTITIES
 // ==========================================
 
+@Entity(tableName = "production_plans")
+@Serializable
 data class ProductionPlan(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val name: String,
     val period: String,
@@ -151,8 +225,10 @@ data class ProductionPlan(
     }
 }
 
+@Entity(tableName = "model_mix_items")
+@Serializable
 data class ModelMixItem(
-    val id: String,
+    @PrimaryKey val id: String,
     val planId: String,
     val modelId: String,
     val modelName: String,
@@ -168,8 +244,10 @@ data class ModelMixItem(
         get() = manualMixOverride ?: calculatedMixPercentage
 }
 
+@Entity(tableName = "production_sequences")
+@Serializable
 data class ProductionSequence(
-    val id: String,
+    @PrimaryKey val id: String,
     val planId: String,
     val name: String,
     val modelPattern: List<String>,
@@ -178,6 +256,7 @@ data class ProductionSequence(
     val pitchMinutes: Double = 1.0
 )
 
+@Serializable
 enum class ConstraintType {
     PRECEDENCE_VIOLATION,
     MODEL_NOT_APPLICABLE,
@@ -186,6 +265,7 @@ enum class ConstraintType {
     ERGONOMIC_LIMIT_EXCEEDED
 }
 
+@Serializable
 data class ConstraintViolation(
     val type: ConstraintType,
     val elementId: String,
@@ -193,6 +273,7 @@ data class ConstraintViolation(
     val description: String
 )
 
+@Serializable
 enum class RedistributionChangeType {
     MOVE_STATION,
     MOVE_OPERATOR,
@@ -203,6 +284,7 @@ enum class RedistributionChangeType {
     CHANGE_MANPOWER
 }
 
+@Serializable
 data class RedistributionProposal(
     val elementId: String,
     val changeType: RedistributionChangeType,
@@ -213,6 +295,7 @@ data class RedistributionProposal(
     val reason: String = ""
 )
 
+@Serializable
 data class MultiModelAiDiagnosis(
     val observedFacts: List<String>,
     val calculatedResults: List<String>,
@@ -227,6 +310,7 @@ data class MultiModelAiDiagnosis(
 // V2.2 ADVANCED AI VIDEO TIME STUDY ENTITIES
 // =============================================================================
 
+@Serializable
 enum class VideoStudyStatus {
     DRAFT,
     ANALYZING,
@@ -236,6 +320,7 @@ enum class VideoStudyStatus {
     FAILED
 }
 
+@Serializable
 enum class VideoActivityCategory {
     REACH,
     PICK,
@@ -262,6 +347,7 @@ enum class VideoActivityCategory {
     OTHER
 }
 
+@Serializable
 enum class ValidationStatus {
     AI_SUGGESTED,
     USER_VALIDATED,
@@ -269,6 +355,7 @@ enum class ValidationStatus {
     REJECTED
 }
 
+@Serializable
 enum class DataSourceLabel {
     USER_INPUT,
     OBSERVED,
@@ -279,8 +366,10 @@ enum class DataSourceLabel {
     ESTIMATED
 }
 
+@Entity(tableName = "video_studies")
+@Serializable
 data class VideoStudyMetadata(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val name: String,
     val modelId: String,
@@ -302,6 +391,7 @@ data class VideoStudyMetadata(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+@Serializable
 data class ImmutableCandidateSnapshot(
     val name: String,
     val startTime: Double,
@@ -312,8 +402,10 @@ data class ImmutableCandidateSnapshot(
     val confidenceScore: Double
 )
 
+@Entity(tableName = "video_candidates")
+@Serializable
 data class AICandidateElement(
-    val id: String,
+    @PrimaryKey val id: String,
     val studyId: String,
     val elementId: String? = null,
     val cycleNumber: Int = 1,
@@ -350,8 +442,10 @@ data class AICandidateElement(
         }
 }
 
+@Entity(tableName = "study_cycles")
+@Serializable
 data class StudyCycle(
-    val id: String,
+    @PrimaryKey val id: String,
     val studyId: String,
     val cycleNumber: Int,
     val startTime: Double,
@@ -362,6 +456,7 @@ data class StudyCycle(
     val exclusionReason: String = ""
 )
 
+@Serializable
 data class CycleStatistics(
     val cycleCount: Int,
     val validCycleCount: Int,
@@ -381,6 +476,7 @@ data class CycleStatistics(
     val nvaPercent: Double
 )
 
+@Serializable
 data class VideoImprovementOpportunity(
     val id: String,
     val studyId: String,
@@ -395,6 +491,7 @@ data class VideoImprovementOpportunity(
     val validationRequired: String
 )
 
+@Serializable
 data class VideoStudyAiReport(
     val observedFacts: List<String>,
     val calculatedResults: List<String>,
@@ -412,8 +509,10 @@ data class VideoStudyAiReport(
 enum class AIProviderType { GEMINI, NVIDIA_NIM, OPENAI_COMPATIBLE, LOCAL }
 enum class AiRole { USER, ASSISTANT, SYSTEM }
 
+@Entity(tableName = "ai_provider_configs")
+@Serializable
 data class AIProviderConfig(
-    val id: String,
+    @PrimaryKey val id: String,
     val name: String,
     val type: AIProviderType,
     val baseUrl: String,
@@ -422,8 +521,10 @@ data class AIProviderConfig(
     val capabilities: List<String> = emptyList() // "text", "vision", "tool-calling", "streaming"
 )
 
+@Entity(tableName = "ai_model_configs")
+@Serializable
 data class AIModelConfig(
-    val id: String,
+    @PrimaryKey val id: String,
     val providerId: String,
     val modelId: String,
     val name: String,
@@ -433,8 +534,10 @@ data class AIModelConfig(
     val taskType: String = "GENERAL" // "GENERAL", "REASONING", "VISION", "WHAT_IF"
 )
 
+@Entity(tableName = "ai_chat_messages")
+@Serializable
 data class AiChatMessage(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val role: AiRole,
     val content: String,
@@ -444,8 +547,10 @@ data class AiChatMessage(
     val providerUsed: String? = null
 )
 
+@Entity(tableName = "ai_evidence")
+@Serializable
 data class AiEvidence(
-    val id: String,
+    @PrimaryKey val id: String,
     val source: String, // "STATION", "ELEMENT", "CALCULATION", "OBSERVATION", "SCENARIO"
     val referenceId: String,
     val dataLabel: String,
@@ -453,6 +558,7 @@ data class AiEvidence(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Serializable
 data class AiIeAnalysis(
     val observedFacts: List<String>,
     val calculatedResults: List<String>,
@@ -465,6 +571,7 @@ data class AiIeAnalysis(
     val validationRequired: List<String>
 )
 
+@Serializable
 data class AiProjectHealth(
     val stableAreas: List<String>,
     val attentionAreas: List<String>,
@@ -474,6 +581,7 @@ data class AiProjectHealth(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Serializable
 data class AiActionPlanItem(
     val id: String,
     val problem: String,
@@ -494,6 +602,7 @@ data class AiActionPlanItem(
 // V2.4 — INTEGRATED OPERATIONAL EXCELLENCE ENTITIES
 // =============================================================================
 
+@Serializable
 enum class OeeLossCategory {
     PLANNED_DOWNTIME, // Management Loss, Meeting, Break
     AVAILABILITY_LOSS, // Breakdown, Setup, Tool Change, Minor Stop
@@ -501,21 +610,27 @@ enum class OeeLossCategory {
     QUALITY_LOSS // Scrap, Rework
 }
 
+@Entity(tableName = "oee_records")
+@Serializable
 data class OeeRecord(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val lineId: String,
     val date: String,
     val shift: String,
-    val plannedProductionTimeMinutes: Double,
+    val durationMinutes: Double,
+    val plannedDowntimeMinutes: Double,
+    val unplannedDowntimeMinutes: Double,
     val idealCycleTimeSeconds: Double,
     val totalCount: Int,
     val goodCount: Int,
     val rejectCount: Int
 )
 
+@Entity(tableName = "loss_events")
+@Serializable
 data class LossEvent(
-    val id: String,
+    @PrimaryKey val id: String,
     val oeeRecordId: String,
     val category: OeeLossCategory,
     val reason: String,
@@ -528,16 +643,21 @@ data class LossEvent(
     val evidenceReference: String? = null
 )
 
+@Serializable
 enum class RcaStatus { IDENTIFIED, ANALYZING, CAUSE_FOUND, COUNTERMEASURE_DEFINED, CLOSED }
 
+@Serializable
 data class FiveWhyStep(
     val whyNumber: Int,
     val whyText: String,
     val evidence: String? = null
 )
 
+@Entity(tableName = "rca_records")
+@Serializable
 data class RcaRecord(
-    val id: String,
+    @PrimaryKey val id: String,
+    val projectId: String,
     val problemStatement: String,
     val evidenceReference: String?,
     val lossEventId: String? = null,
@@ -551,10 +671,13 @@ data class RcaRecord(
     val validationStatus: ValidationStatus = ValidationStatus.AI_SUGGESTED
 )
 
+@Serializable
 enum class KaizenStatus { IDEA, UNDER_ANALYSIS, APPROVED, IN_PROGRESS, IMPLEMENTED, UNDER_VALIDATION, CLOSED, REJECTED }
 
+@Entity(tableName = "kaizen_records")
+@Serializable
 data class KaizenRecord(
-    val id: String,
+    @PrimaryKey val id: String,
     val title: String,
     val rcaId: String?,
     val status: KaizenStatus = KaizenStatus.IDEA,
@@ -575,8 +698,10 @@ data class KaizenRecord(
     val validationStatus: ValidationStatus = ValidationStatus.AI_SUGGESTED
 )
 
+@Serializable
 enum class SwStatus { DRAFT, IE_REVIEWED, APPROVED, RELEASED, SUPERSEDED }
 
+@Serializable
 data class StandardWorkElement(
     val id: String,
     val workElementId: String?, // Link to validated time study element
@@ -590,8 +715,10 @@ data class StandardWorkElement(
     val criticalPoints: String = ""
 )
 
+@Entity(tableName = "standard_work_revisions")
+@Serializable
 data class StandardWorkRevision(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val stationId: String,
     val modelId: String,
@@ -604,6 +731,7 @@ data class StandardWorkRevision(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+@Serializable
 data class ErgoRiskFactor(
     val factor: String, // Posture, Force, Repetition, etc.
     val observation: String,
@@ -611,8 +739,10 @@ data class ErgoRiskFactor(
     val action: String? = null
 )
 
+@Entity(tableName = "ergonomic_assessments")
+@Serializable
 data class ErgoAssessment(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val stationId: String,
     val workElementId: String? = null,
@@ -627,6 +757,7 @@ data class ErgoAssessment(
     val validationStatus: ValidationStatus = ValidationStatus.AI_SUGGESTED
 )
 
+@Serializable
 data class VsmProcessStep(
     val id: String,
     val name: String,
@@ -639,8 +770,10 @@ data class VsmProcessStep(
     val stationId: String? = null
 )
 
+@Entity(tableName = "vsm_maps")
+@Serializable
 data class VsmMap(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val name: String,
     val isFutureState: Boolean = false,
@@ -650,8 +783,10 @@ data class VsmMap(
     val createdAt: Long = System.currentTimeMillis()
 )
 
+@Entity(tableName = "material_flows")
+@Serializable
 data class MaterialFlow(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val sourceId: String,
     val destinationId: String,
@@ -662,10 +797,13 @@ data class MaterialFlow(
     val handlingTimeSeconds: Double
 )
 
+@Serializable
 enum class BenefitType { TIME_SAVING, CAPACITY_INCREASE, MANPOWER_OPTIMISATION, QUALITY_IMPROVEMENT, SCRAP_REDUCTION, ENERGY_SAVING, SPACE_SAVING, LEAD_TIME_REDUCTION }
 
+@Entity(tableName = "improvement_benefits")
+@Serializable
 data class ImprovementBenefit(
-    val id: String,
+    @PrimaryKey val id: String,
     val kaizenId: String,
     val type: BenefitType,
     val value: Double,
@@ -674,6 +812,7 @@ data class ImprovementBenefit(
     val description: String = ""
 )
 
+@Serializable
 data class OeeMetrics(
     val availability: Double,
     val performance: Double,
@@ -691,8 +830,10 @@ data class OeeMetrics(
 // V2.5 — ENTERPRISE IE & DIGITAL SIMULATION ENTITIES
 // =============================================================================
 
+@Entity(tableName = "time_study_templates")
+@Serializable
 data class TimeStudyTemplate(
-    val id: String,
+    @PrimaryKey val id: String,
     val name: String,
     val activityCategory: VideoActivityCategory,
     val defaultClassification: ValueClassification = ValueClassification.VA,
@@ -700,6 +841,7 @@ data class TimeStudyTemplate(
     val colorHex: String? = null
 )
 
+@Serializable
 data class SimulationNode(
     val stationId: String,
     val cycleTimeSeconds: Double,
@@ -709,8 +851,10 @@ data class SimulationNode(
     val incomingWip: Int = 0
 )
 
+@Entity(tableName = "simulation_results")
+@Serializable
 data class SimulationResult(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val scenarioName: String,
     val throughputPerHour: Double,
@@ -726,12 +870,15 @@ data class SimulationResult(
     val timestamp: Long = System.currentTimeMillis()
 )
 
+@Serializable
 enum class BenchmarkMetric {
     OEE, CYCLE_TIME, BALANCE_EFFICIENCY, VA_PERCENT, PRODUCTIVITY, CAPACITY_UTIL_PERCENT, LEAD_TIME
 }
 
+@Entity(tableName = "enterprise_kpis")
+@Serializable
 data class EnterpriseKpi(
-    val id: String,
+    @PrimaryKey val id: String,
     val entityId: String, // Plant, Line, or Project ID
     val entityType: String, // "PLANT", "LINE", "PROJECT"
     val metric: BenchmarkMetric,
@@ -741,8 +888,10 @@ data class EnterpriseKpi(
     val trend: Double? = null
 )
 
+@Entity(tableName = "productivity_records")
+@Serializable
 data class ProductivityRecord(
-    val id: String,
+    @PrimaryKey val id: String,
     val projectId: String,
     val date: String,
     val shift: String,
@@ -752,12 +901,135 @@ data class ProductivityRecord(
     val labourContentSeconds: Double // Total seconds per unit
 )
 
+@Entity(tableName = "savings_validations")
+@Serializable
 data class SavingsValidation(
-    val id: String,
+    @PrimaryKey val id: String,
     val benefitId: String,
     val status: ValidationStatus = ValidationStatus.AI_SUGGESTED,
     val validatedBy: String? = null,
     val validatedAt: Long? = null,
     val notes: String = ""
+)
+
+// =============================================================================
+// V2.6 — ADDITIONAL IE MODULE ENTITIES (CAPACITY, VSM, SPAGHETTI, MOTION, SAVINGS)
+// =============================================================================
+
+@Entity(tableName = "capacity_scenarios")
+@Serializable
+data class CapacityScenario(
+    @PrimaryKey val id: String,
+    val projectId: String,
+    val name: String,
+    val isFuture: Boolean,
+    val dailyDemand: Int = 400,
+    val shiftLengthHours: Double = 8.0,
+    val breaksMinutes: Double = 45.0,
+    val plannedDowntimeMinutes: Double = 15.0,
+    val performanceEfficiency: Double = 0.95,
+    val qualityYield: Double = 0.98,
+    val actualManpower: Int = 8,
+    val bottleneckCtSec: Double = 60.0,
+    val validatedManpowerSaving: Int = 0
+)
+
+@Serializable
+enum class VsmNodeType { SUPPLIER, CUSTOMER, PROCESS, INVENTORY, SUPERMARKET, KANBAN, PROD_CONTROL }
+@Serializable
+enum class VsmEdgeType { MATERIAL, INFORMATION, FIFO, SHIPMENT }
+
+@Serializable
+data class VsmNode(
+    val id: String,
+    val type: VsmNodeType,
+    val name: String,
+    val x: Float,
+    val y: Float,
+    val cycleTime: Double = 0.0,
+    val uptime: Double = 100.0,
+    val operators: Int = 1,
+    val wip: Double = 0.0,
+    val leadTimeDays: Double = 0.0,
+    val vaTimeSec: Double = 0.0,
+    val nnvaTimeSec: Double = 0.0,
+    val nvaTimeSec: Double = 0.0,
+    val linkedStationId: String? = null
+)
+
+@Serializable
+data class VsmEdge(
+    val id: String,
+    val sourceId: String,
+    val targetId: String,
+    val type: VsmEdgeType
+)
+
+@Entity(tableName = "vsm_scenarios")
+@Serializable
+data class VsmState(
+    @PrimaryKey val id: String,
+    val projectId: String,
+    val name: String,
+    val isFutureState: Boolean,
+    val nodes: List<VsmNode>,
+    val edges: List<VsmEdge>
+)
+
+@Serializable
+enum class SpaghettiNodeType { STATION, MACHINE, MATERIAL_RACK, WIP, TOOL, OPERATOR }
+@Serializable
+enum class SpaghettiPathType { OPERATOR, MATERIAL }
+
+@Serializable
+data class SpaghettiNode(
+    val id: String,
+    val type: SpaghettiNodeType,
+    val name: String,
+    val x: Float,
+    val y: Float
+)
+
+@Serializable
+data class SpaghettiPath(
+    val id: String,
+    val sourceId: String,
+    val targetId: String,
+    val type: SpaghettiPathType,
+    val distanceMeters: Double = 0.0,
+    val tripsPerCycle: Int = 1
+)
+
+@Entity(tableName = "spaghetti_diagrams")
+@Serializable
+data class SpaghettiScenario(
+    @PrimaryKey val id: String,
+    val projectId: String,
+    val name: String,
+    val isFuture: Boolean,
+    val nodes: List<SpaghettiNode>,
+    val paths: List<SpaghettiPath>
+)
+
+@Entity(tableName = "motion_studies")
+@Serializable
+data class MotionStudy(
+    @PrimaryKey val id: String,
+    val projectId: String,
+    val name: String,
+    val workElementId: String,
+    val events: List<MotionEvent>
+)
+
+@Entity(tableName = "savings_calculations")
+@Serializable
+data class SavingsCalculation(
+    @PrimaryKey val id: String,
+    val projectId: String,
+    val kaizenId: String,
+    val benefitType: BenefitType,
+    val annualSavings: Double,
+    val paybackPeriodMonths: Double,
+    val investmentRequired: Double
 )
 

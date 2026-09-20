@@ -1,11 +1,10 @@
 package com.example.ui
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.example.data.*
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.launch
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -28,80 +27,70 @@ data class ElementStats(
     val cv: Double = if (average > 0) (stdDev / average) * 100.0 else 0.0
 }
 
-class TimeStudyViewModel : ViewModel() {
-    private val repository = ManufacturingRepository.getInstance()
+class TimeStudyViewModel(private val repository: ManufacturingRepository) : ViewModel() {
 
-    private val _workElements = MutableStateFlow<List<WorkElement>>(emptyList())
-    val workElements: StateFlow<List<WorkElement>> = _workElements.asStateFlow()
-
-    private val _observations = MutableStateFlow<List<Observation>>(emptyList())
-    val observations: StateFlow<List<Observation>> = _observations.asStateFlow()
+    private val _projectId = MutableStateFlow<String?>(null)
+    
+    val workElements: StateFlow<List<WorkElement>> = _projectId
+        .flatMapLatest { id -> 
+            if (id != null) repository.getWorkElementsForProject(id) else flowOf(emptyList())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private val _selectedElement = MutableStateFlow<WorkElement?>(null)
     val selectedElement: StateFlow<WorkElement?> = _selectedElement.asStateFlow()
 
-    init {
-        loadData()
-    }
-
-    fun loadData() {
-        _workElements.value = repository.workElements.toList()
-        _observations.value = repository.observations.toList()
-        if (_selectedElement.value == null && _workElements.value.isNotEmpty()) {
-            _selectedElement.value = _workElements.value.first()
+    val observations: StateFlow<List<Observation>> = _selectedElement
+        .flatMapLatest { el ->
+            if (el != null) repository.getObservationsForElement(el.id) else flowOf(emptyList())
         }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun initialize(id: String) {
+        _projectId.value = id
     }
 
     fun selectElement(element: WorkElement) {
         _selectedElement.value = element
     }
 
-    fun getStatsForElement(elementId: String): ElementStats? {
-        val element = _workElements.value.find { it.id == elementId } ?: return null
-        val obs = _observations.value.filter { it.workElementId == elementId }
+    fun getStatsForElement(element: WorkElement, obs: List<Observation>): ElementStats {
         return ElementStats(element, obs, obs.filter { !it.isRejected })
     }
 
-    fun toggleObservationRejection(observationId: String) {
-        val index = repository.observations.indexOfFirst { it.id == observationId }
-        if (index != -1) {
-            val obs = repository.observations[index]
-            repository.observations[index] = obs.copy(isRejected = !obs.isRejected)
-            loadData()
+    fun toggleObservationRejection(observation: Observation) {
+        viewModelScope.launch {
+            repository.insertObservation(observation.copy(isRejected = !observation.isRejected))
         }
     }
 
-    fun updatePerformanceRating(elementId: String, rating: Double) {
-        val index = repository.workElements.indexOfFirst { it.id == elementId }
-        if (index != -1) {
-            val el = repository.workElements[index]
-            val obs = repository.observations.filter { it.workElementId == elementId && !it.isRejected }
-            val avg = if (obs.isNotEmpty()) obs.map { it.observedTime }.average() else el.observedTime
+    fun updatePerformanceRating(element: WorkElement, rating: Double, obs: List<Observation>) {
+        viewModelScope.launch {
+            val activeObs = obs.filter { !it.isRejected }
+            val avg = if (activeObs.isNotEmpty()) activeObs.map { it.observedTime }.average() else element.observedTime
             val normalTime = avg * rating
-            val standardTime = normalTime * (1 + el.allowance)
+            val standardTime = normalTime * (1 + element.allowance)
             
-            repository.workElements[index] = el.copy(
+            val updated = element.copy(
                 performanceRating = rating,
                 observedTime = avg,
                 normalTime = normalTime,
                 standardTime = standardTime
             )
-            loadData()
-            _selectedElement.value = repository.workElements[index]
+            repository.insertWorkElement(updated)
+            _selectedElement.value = updated
         }
     }
 
-    fun updateAllowance(elementId: String, allowance: Double) {
-        val index = repository.workElements.indexOfFirst { it.id == elementId }
-        if (index != -1) {
-            val el = repository.workElements[index]
-            val standardTime = el.normalTime * (1 + allowance)
-            repository.workElements[index] = el.copy(
+    fun updateAllowance(element: WorkElement, allowance: Double) {
+        viewModelScope.launch {
+            val standardTime = element.normalTime * (1 + allowance)
+            val updated = element.copy(
                 allowance = allowance,
                 standardTime = standardTime
             )
-            loadData()
-            _selectedElement.value = repository.workElements[index]
+            repository.insertWorkElement(updated)
+            _selectedElement.value = updated
         }
     }
 }

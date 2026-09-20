@@ -24,7 +24,7 @@ fun EnterpriseAnalyticsScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(Unit) {
-        viewModel.loadEnterpriseData()
+        viewModel.initialize()
     }
 
     Scaffold(

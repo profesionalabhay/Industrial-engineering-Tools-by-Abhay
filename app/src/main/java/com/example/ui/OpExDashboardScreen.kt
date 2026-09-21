@@ -27,7 +27,7 @@ fun OpExDashboardScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(projectId) {
-        viewModel.loadDashboard(projectId)
+        viewModel.initialize(projectId)
     }
 
     Scaffold(
@@ -67,6 +67,14 @@ fun OpExDashboardScreen(
                             isPositiveTrend = true
                         )
                     }
+                }
+
+                // New Process Metrics Dashboard
+                item {
+                    ProcessMetricsDashboard(
+                        cycleTimes = uiState.cycleTimeMetrics,
+                        overallEfficiency = uiState.oeeSummary.firstOrNull()?.oee ?: 0.0
+                    )
                 }
 
                 // Suite Status Cards

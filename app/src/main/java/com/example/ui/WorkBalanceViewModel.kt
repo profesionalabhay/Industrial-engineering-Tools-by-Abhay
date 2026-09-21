@@ -40,10 +40,15 @@ class WorkBalanceViewModel(private val repository: ManufacturingRepository) : Vi
 
     // Base data
     val stations: StateFlow<List<Station>> = _projectId.filterNotNull().flatMapLatest { pid ->
-        repository.getProjectById(pid).flatMapLatest { project ->
-            if (project != null) repository.getProcessesForLine(project.lineId).flatMapLatest { processes ->
-                repository.getAllStations().map { all -> all.filter { st -> processes.any { it.id == st.processId } } }
-            } else flowOf(emptyList())
+        flow {
+            emit(repository.getProjectById(pid))
+        }.filterNotNull().flatMapLatest { project ->
+            combine(
+                repository.getProcessesForLine(project.lineId),
+                repository.getAllStations()
+            ) { processes, allStations ->
+                allStations.filter { st -> processes.any { it.id == st.processId } }
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

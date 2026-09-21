@@ -26,7 +26,7 @@ fun ErgoScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(projectId) {
-        viewModel.loadAssessments(projectId)
+        viewModel.initialize(projectId)
     }
 
     Scaffold(

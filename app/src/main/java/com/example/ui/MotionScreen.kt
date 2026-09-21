@@ -10,6 +10,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,7 +25,8 @@ import com.example.ui.theme.*
 
 @Composable
 fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
-    val motions by viewModel.motions.collectAsStateWithLifecycle()
+    val activeStudy by viewModel.activeStudy.collectAsStateWithLifecycle()
+    val motions = activeStudy?.events ?: emptyList()
     val isAnalyzingVideo by viewModel.isAnalyzingVideo.collectAsStateWithLifecycle()
     val aiSuggestions by viewModel.aiSuggestions.collectAsStateWithLifecycle()
 
@@ -273,9 +276,10 @@ fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
                                         Text(sug.description, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = StitchSlate900)
                                         Spacer(Modifier.height(2.dp))
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text(sug.category.name, style = IeTypography.dataMonoBold, color = StitchCobalt700)
+                                            val category = MotionCategory.valueOf(sug.therblig)
+                                            Text(sug.therblig, style = IeTypography.dataMonoBold, color = StitchCobalt700)
                                             Spacer(Modifier.width(8.dp))
-                                            Text("${sug.timeSec}s", style = IeTypography.dataMono, color = StitchSlate600)
+                                            Text("${sug.timeMs / 1000.0}s", style = IeTypography.dataMono, color = StitchSlate600)
                                         }
                                     }
                                     Row {
@@ -305,7 +309,7 @@ fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
                         colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
                         shape = IeRadius.buttonShape
                     ) {
-                        Text("Analyze Demo Feed")
+                        Text("Analyze Video Study")
                     }
                 }
             },
@@ -326,7 +330,7 @@ fun MotionScreen(viewModel: MotionViewModel, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun MotionRow(motion: MotionElement, onDelete: () -> Unit) {
+fun MotionRow(motion: MotionEvent, onDelete: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = IeRadius.cardShape,
@@ -338,19 +342,20 @@ fun MotionRow(motion: MotionElement, onDelete: () -> Unit) {
             modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val category = MotionCategory.valueOf(motion.therblig)
             IeClassificationBadge(
-                valueClassification = if (motion.category.isValueAdding) ValueClassification.VA else ValueClassification.NVA
+                valueClassification = if (category.isValueAdding) ValueClassification.VA else ValueClassification.NVA
             )
             Spacer(Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(motion.description, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = StitchSlate900)
+                Text(motion.description, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = StitchSlate900)
                 Spacer(Modifier.height(2.dp))
-                Text(motion.category.name, style = IeTypography.dataMono, color = StitchSlate600)
+                Text(motion.therblig, style = IeTypography.dataMono, color = StitchSlate600)
             }
 
             Text(
-                "${motion.timeSec}s",
+                "${motion.timeMs / 1000.0}s",
                 style = IeTypography.dataMonoBold,
                 color = StitchSlate900
             )
@@ -362,3 +367,6 @@ fun MotionRow(motion: MotionElement, onDelete: () -> Unit) {
         }
     }
 }
+
+val MotionEvent.timeSec: Double get() = timeMs / 1000.0
+val MotionEvent.category: MotionCategory get() = MotionCategory.valueOf(therblig)

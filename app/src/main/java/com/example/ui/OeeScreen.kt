@@ -24,7 +24,7 @@ fun OeeScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(projectId) {
-        viewModel.loadOeeData(projectId)
+        viewModel.initialize(projectId)
     }
 
     Scaffold(

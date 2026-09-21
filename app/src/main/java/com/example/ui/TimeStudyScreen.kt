@@ -33,6 +33,7 @@ import com.example.ui.theme.*
 fun TimeStudyScreen(viewModel: TimeStudyViewModel, modifier: Modifier = Modifier) {
     val workElements by viewModel.workElements.collectAsStateWithLifecycle()
     val selectedElement by viewModel.selectedElement.collectAsStateWithLifecycle()
+    val observations by viewModel.observations.collectAsStateWithLifecycle()
 
     if (workElements.isEmpty()) {
         IeEmptyState(
@@ -137,8 +138,9 @@ fun TimeStudyScreen(viewModel: TimeStudyViewModel, modifier: Modifier = Modifier
                 .fillMaxHeight()
                 .verticalScroll(rememberScrollState())
         ) {
+            val observations by viewModel.observations.collectAsStateWithLifecycle()
             selectedElement?.let { element ->
-                val stats = viewModel.getStatsForElement(element.id)
+                val stats = viewModel.getStatsForElement(element, observations)
                 if (stats != null) {
                     ElementDetailHeader(element)
                     Spacer(modifier = Modifier.height(12.dp))
@@ -178,7 +180,7 @@ fun TimeStudyScreen(viewModel: TimeStudyViewModel, modifier: Modifier = Modifier
                     when (selectedTabIndex) {
                         0 -> ObservationTableContent(stats, viewModel)
                         1 -> StatisticsContent(stats)
-                        2 -> CalculationsContent(element, viewModel)
+                        2 -> CalculationsContent(element, observations, viewModel)
                         3 -> VaNvaSummaryContent(element)
                     }
                     
@@ -251,7 +253,7 @@ fun ObservationTableContent(stats: ElementStats, viewModel: TimeStudyViewModel) 
                 }
                 Box(modifier = Modifier.weight(1f)) {
                     TextButton(
-                        onClick = { viewModel.toggleObservationRejection(obs.id) },
+                        onClick = { viewModel.toggleObservationRejection(obs) },
                         contentPadding = PaddingValues(0.dp)
                     ) {
                         Text(
@@ -373,7 +375,7 @@ fun StatisticsContent(stats: ElementStats) {
 }
 
 @Composable
-fun CalculationsContent(element: WorkElement, viewModel: TimeStudyViewModel) {
+fun CalculationsContent(element: WorkElement, observations: List<Observation>, viewModel: TimeStudyViewModel) {
     var rating by remember(element.id) { mutableStateOf(element.performanceRating.toString()) }
     var allowance by remember(element.id) { mutableStateOf(element.allowance.toString()) }
 
@@ -407,7 +409,7 @@ fun CalculationsContent(element: WorkElement, viewModel: TimeStudyViewModel) {
                 shape = IeRadius.inputShape
             )
             Button(
-                onClick = { viewModel.updatePerformanceRating(element.id, rating.toDoubleOrNull() ?: 1.0) },
+                onClick = { viewModel.updatePerformanceRating(element, rating.toDoubleOrNull() ?: 1.0, observations) },
                 colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
                 shape = IeRadius.buttonShape
             ) {
@@ -431,7 +433,7 @@ fun CalculationsContent(element: WorkElement, viewModel: TimeStudyViewModel) {
                 shape = IeRadius.inputShape
             )
             Button(
-                onClick = { viewModel.updateAllowance(element.id, allowance.toDoubleOrNull() ?: 0.0) },
+                onClick = { viewModel.updateAllowance(element, allowance.toDoubleOrNull() ?: 0.0) },
                 colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
                 shape = IeRadius.buttonShape
             ) {

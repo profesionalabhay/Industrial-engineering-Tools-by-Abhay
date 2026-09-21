@@ -11,6 +11,7 @@ class ViewModelFactory(
 
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return when {
+            modelClass.isAssignableFrom(DashboardViewModel::class.java) -> DashboardViewModel(repository) as T
             modelClass.isAssignableFrom(ProjectViewModel::class.java) -> ProjectViewModel(repository) as T
             modelClass.isAssignableFrom(TimeStudyViewModel::class.java) -> TimeStudyViewModel(repository) as T
             modelClass.isAssignableFrom(ManualTimeStudyViewModel::class.java) -> ManualTimeStudyViewModel(repository) as T
@@ -25,7 +26,6 @@ class ViewModelFactory(
             modelClass.isAssignableFrom(StandardWorkViewModel::class.java) -> StandardWorkViewModel(repository) as T
             modelClass.isAssignableFrom(EnterpriseViewModel::class.java) -> EnterpriseViewModel(repository) as T
             modelClass.isAssignableFrom(CapacityViewModel::class.java) -> CapacityViewModel(repository) as T
-            modelClass.isAssignableFrom(ManpowerScreenViewModel::class.java) -> ManpowerScreenViewModel(repository) as T
             modelClass.isAssignableFrom(ErgoViewModel::class.java) -> ErgoViewModel(repository) as T
             modelClass.isAssignableFrom(VsmViewModel::class.java) -> VsmViewModel(repository) as T
             modelClass.isAssignableFrom(SimulationViewModel::class.java) -> SimulationViewModel(repository, simulationEngine) as T

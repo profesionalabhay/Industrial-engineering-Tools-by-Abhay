@@ -42,7 +42,7 @@ fun VsmScreen(viewModel: VsmViewModel, modifier: Modifier = Modifier) {
     val metrics by viewModel.metrics.collectAsStateWithLifecycle()
     val selectedNodeId by viewModel.selectedNodeId.collectAsStateWithLifecycle()
     val isConnecting by viewModel.isConnecting.collectAsStateWithLifecycle()
-    val availableStations = viewModel.availableStations
+    val availableStations by viewModel.availableStations.collectAsStateWithLifecycle()
 
     val activeState = scenarios.find { it.id == activeScenarioId }
 

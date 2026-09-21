@@ -20,15 +20,19 @@ class MultiModelViewModel(private val repository: ManufacturingRepository) : Vie
 
     val productionPlan: StateFlow<ProductionPlan?> = combine(productionPlans, _activePlanId) { plans, activeId ->
         plans.find { it.id == activeId } ?: plans.firstOrNull()
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null as ProductionPlan?)
 
     val modelMix: StateFlow<List<ModelMixItem>> = productionPlan.filterNotNull().flatMapLatest { plan ->
         repository.getModelMixForPlan(plan.id)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<ModelMixItem>())
+
+    val productionSequence: StateFlow<ProductionSequence?> = productionPlan.filterNotNull().flatMapLatest { plan ->
+        repository.getSequenceForPlan(plan.id)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null as ProductionSequence?)
 
     val models: StateFlow<List<Model>> = _currentProjectId.filterNotNull().flatMapLatest { pid ->
         repository.getModelsForProject(pid)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList<Model>())
 
     private val _lineSummary = MutableStateFlow<MixedModelLineSummary?>(null)
     val lineSummary: StateFlow<MixedModelLineSummary?> = _lineSummary.asStateFlow()
@@ -53,6 +57,13 @@ class MultiModelViewModel(private val repository: ManufacturingRepository) : Vie
 
     private val _isCalculating = MutableStateFlow(false)
     val isCalculating: StateFlow<Boolean> = _isCalculating.asStateFlow()
+
+    val allWorkElements: StateFlow<List<WorkElement>> = _currentProjectId.filterNotNull().flatMapLatest { pid ->
+        repository.getWorkElementsForProject(pid)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allStations: StateFlow<List<Station>> = repository.getAllStations()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun initialize(projectId: String) {
         _currentProjectId.value = projectId

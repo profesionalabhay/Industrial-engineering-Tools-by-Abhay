@@ -2,6 +2,7 @@ package com.example.data
 
 import com.example.data.db.AppDatabase
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import java.util.UUID
 
 class ManufacturingRepository(private val database: AppDatabase) {
@@ -68,6 +69,8 @@ class ManufacturingRepository(private val database: AppDatabase) {
 
     fun getProductionPlans(projectId: String): Flow<List<ProductionPlan>> = operationalDao.getProductionPlans(projectId)
     fun getModelMixForPlan(planId: String): Flow<List<ModelMixItem>> = operationalDao.getModelMixForPlan(planId)
+    fun getSequenceForPlan(planId: String): Flow<ProductionSequence?> = operationalDao.getSequenceForPlan(planId).map { it.firstOrNull() }
+    suspend fun insertSequence(sequence: ProductionSequence) = operationalDao.insertSequence(sequence)
 
     // --- Enterprise ---
     fun getEnterpriseKpis(): Flow<List<EnterpriseKpi>> = operationalDao.getEnterpriseKpis()
@@ -135,6 +138,45 @@ class ManufacturingRepository(private val database: AppDatabase) {
     suspend fun insertVideoCandidate(candidate: AICandidateElement) = videoStudyDao.insertVideoCandidate(candidate)
     suspend fun deleteVideoCandidate(candidateId: String) = videoStudyDao.deleteVideoCandidate(candidateId)
 
+    suspend fun commitCandidateToWorkElement(candidate: AICandidateElement, targetStationId: String? = null) {
+        val study = videoStudyDao.getVideoStudyById(candidate.studyId) ?: return
+        val newElement = WorkElement(
+            id = UUID.randomUUID().toString(),
+            projectId = study.projectId,
+            modelId = study.modelId,
+            processId = "", 
+            stationId = targetStationId ?: study.stationId,
+            operatorId = study.operatorId ?: "",
+            sequence = 10,
+            name = candidate.name,
+            description = candidate.description,
+            startTime = candidate.startTime,
+            endTime = candidate.endTime,
+            observedTime = candidate.duration,
+            normalTime = candidate.duration,
+            standardTime = candidate.duration * 1.1,
+            performanceRating = 1.0,
+            allowance = 0.1,
+            valueClassification = if (candidate.finalClassification == ValueClassification.VA) ValueClassification.VA else ValueClassification.NVA,
+            wasteCategory = if (candidate.finalClassification != ValueClassification.VA) WasteCategory.TRANSPORTATION else WasteCategory.NONE,
+            toolIds = emptyList(),
+            materialIds = emptyList(),
+            predecessorIds = emptyList(),
+            successorIds = emptyList(),
+            transferable = true,
+            combinable = true,
+            parallelizable = false,
+            eliminable = false,
+            automationOpportunity = false,
+            confidence = 1.0,
+            evidenceReference = "${study.videoFileName}#t=${candidate.startTime}",
+            notes = "Committed from AI Video Analysis",
+            applicability = ElementApplicability.COMMON
+        )
+        workDao.insertWorkElement(newElement)
+        videoStudyDao.insertVideoCandidate(candidate.copy(validationStatus = ValidationStatus.USER_VALIDATED))
+    }
+
     fun getStudyCycles(studyId: String): Flow<List<StudyCycle>> = videoStudyDao.getStudyCycles(studyId)
     suspend fun insertStudyCycle(cycle: StudyCycle) = videoStudyDao.insertStudyCycle(cycle)
 
@@ -164,39 +206,8 @@ class ManufacturingRepository(private val database: AppDatabase) {
     fun getAllTimeStudyTemplates(): Flow<List<TimeStudyTemplate>> = database.timeStudyDao().getAllTemplates()
     suspend fun insertTimeStudyTemplate(template: TimeStudyTemplate) = database.timeStudyDao().insertTemplate(template)
 
-    // Sample data seeding (can be called manually)
+    // Sample data seeding (can be called manually if needed)
     suspend fun seedSampleData() {
-        val plantId = "PLT-1"
-        insertPlant(Plant(plantId, "Main Assembly Plant", "Detroit, MI"))
-        
-        val lineId = "LN-1"
-        insertLine(Line(lineId, plantId, "Assembly Line 1"))
-        
-        val projectId = "P-001"
-        insertProject(Project(projectId, lineId, "Line 1 Assembly Optimization", "Improving cycle time for main assembly line.", "Active"))
-        
-        val modelId = "MDL-1"
-        insertModel(Model(modelId, projectId, "Delta Standard", 500, variant = "Base", family = "Delta Series"))
-        
-        val processId = "PRC-1"
-        insertProcess(Process(processId, lineId, "Final Assembly"))
-        
-        val stationId = "ST-04"
-        insertStation(Station(stationId, processId, "Station 04 - Housing"))
-        
-        insertOperator(Operator("OP-1", "John D.", "Expert"))
-        
-        val weId = "WE-001"
-        insertWorkElement(WorkElement(
-            id = weId, projectId = projectId, modelId = modelId, processId = processId, stationId = stationId, operatorId = "OP-1",
-            sequence = 10, name = "Retrieve housing", description = "Get main housing from bin",
-            startTime = 0.0, endTime = 2.5, observedTime = 2.5, normalTime = 2.5, standardTime = 2.75,
-            performanceRating = 1.0, allowance = 0.1, valueClassification = ValueClassification.NNVA,
-            wasteCategory = WasteCategory.MOTION, toolIds = emptyList(), materialIds = emptyList(),
-            predecessorIds = emptyList(), successorIds = emptyList(),
-            transferable = true, combinable = true, parallelizable = false, eliminable = false,
-            automationOpportunity = false, confidence = 0.95, evidenceReference = "Vid_01_00:00", notes = "",
-            applicability = ElementApplicability.COMMON
-        ))
+        // No-op for production readiness.
     }
 }

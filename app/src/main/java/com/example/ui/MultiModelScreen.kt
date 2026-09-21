@@ -794,12 +794,23 @@ fun WorkRedistributionTab(
     simulation: RedistributionSimulationResult?,
     viewModel: MultiModelViewModel
 ) {
-    val repository = ManufacturingRepository.getInstance()
-    val elements = repository.workElements.filter { it.projectId == "P-001" }
-    val stations = repository.stations
+    val elements by viewModel.allWorkElements.collectAsStateWithLifecycle()
+    val stations by viewModel.allStations.collectAsStateWithLifecycle()
 
-    var selectedElementId by remember { mutableStateOf(elements.firstOrNull()?.id ?: "") }
-    var selectedTargetStationId by remember { mutableStateOf(stations.lastOrNull()?.id ?: "") }
+    var selectedElementId by remember { mutableStateOf("") }
+    var selectedTargetStationId by remember { mutableStateOf("") }
+
+    LaunchedEffect(elements) {
+        if (selectedElementId.isEmpty() && elements.isNotEmpty()) {
+            selectedElementId = elements.first().id
+        }
+    }
+    
+    LaunchedEffect(stations) {
+        if (selectedTargetStationId.isEmpty() && stations.isNotEmpty()) {
+            selectedTargetStationId = stations.last().id
+        }
+    }
 
     IeCard(modifier = Modifier.fillMaxSize()) {
         LazyColumn(

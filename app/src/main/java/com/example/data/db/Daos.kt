@@ -135,6 +135,12 @@ interface OperationalDao {
     @Query("SELECT * FROM model_mix_items WHERE planId = :planId")
     fun getModelMixForPlan(planId: String): Flow<List<ModelMixItem>>
 
+    @Query("SELECT * FROM production_sequences WHERE planId = :planId")
+    fun getSequenceForPlan(planId: String): Flow<List<ProductionSequence>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSequence(sequence: ProductionSequence)
+
     @Query("SELECT * FROM production_plans WHERE projectId = :projectId")
     fun getProductionPlans(projectId: String): Flow<List<ProductionPlan>>
 

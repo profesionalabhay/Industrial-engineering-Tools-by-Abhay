@@ -701,7 +701,7 @@ fun ElementClassificationCard(element: WorkElement, viewModel: YamazumiViewModel
                 Spacer(Modifier.height(12.dp))
                 Button(
                     onClick = {
-                        viewModel.updateElementClassification(element.id, selectedClassification, selectedWaste, reason)
+                        viewModel.updateElementClassification(element, selectedClassification, selectedWaste, reason)
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
                     shape = IeRadius.buttonShape,

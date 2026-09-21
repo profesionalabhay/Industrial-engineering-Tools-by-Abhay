@@ -25,13 +25,15 @@ class StandardWorkViewModel(private val repository: ManufacturingRepository) : V
             _uiState.update { it.copy(isLoading = true) }
             
             repository.getStandardWorkRevisions(projectId).collect { revisions ->
-                val current = revisions.maxByOrNull { it.revisionNumber }
+                val current = revisions.maxByOrNull { it.version }
                 
-                _uiState.update { it.copy(
-                    currentRevision = current,
-                    history = revisions,
-                    isLoading = false
-                ) }
+                _uiState.update { state ->
+                    state.copy(
+                        currentRevision = current,
+                        history = revisions,
+                        isLoading = false
+                    )
+                }
             }
         }
     }

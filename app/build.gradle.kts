@@ -105,6 +105,8 @@ dependencies {
   implementation(libs.kotlinx.coroutines.core)
   implementation(libs.logging.interceptor)
   implementation(libs.moshi.kotlin)
+  implementation(libs.vico.compose)
+  implementation(libs.vico.compose.m3)
   implementation(libs.kotlinx.serialization.json)
   implementation(libs.okhttp)
   // implementation(libs.play.services.location)

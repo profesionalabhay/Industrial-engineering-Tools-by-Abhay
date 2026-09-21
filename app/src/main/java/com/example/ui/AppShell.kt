@@ -57,6 +57,7 @@ fun AppShell() {
     val kaizenViewModel: KaizenViewModel = viewModel(factory = factory)
     val standardWorkViewModel: StandardWorkViewModel = viewModel(factory = factory)
     val opexDashboardViewModel: OpExDashboardViewModel = viewModel(factory = factory)
+    val dashboardViewModel: DashboardViewModel = viewModel(factory = factory)
     val ergoViewModel: ErgoViewModel = viewModel(factory = factory)
     val aiCopilotViewModel: AiCopilotViewModel = viewModel(factory = factory)
     val manualTimeStudyViewModel: ManualTimeStudyViewModel = viewModel(factory = factory)
@@ -64,38 +65,35 @@ fun AppShell() {
     val enterpriseViewModel: EnterpriseViewModel = viewModel(factory = factory)
     val savingsViewModel: SavingsViewModel = viewModel(factory = factory)
     
-    // Initialize ViewModels with default project
-    LaunchedEffect(Unit) {
-        val defaultProjectId = "P-001"
-        projectViewModel.selectProjectById(defaultProjectId)
-        timeStudyViewModel.initialize(defaultProjectId)
-        videoStudyViewModel.initialize(defaultProjectId)
-        yamazumiViewModel.initialize(defaultProjectId)
-        workBalanceViewModel.initialize(defaultProjectId)
-        oeeViewModel.initialize(defaultProjectId)
-        kaizenViewModel.initialize(defaultProjectId)
-        rcaViewModel.initialize(defaultProjectId)
-        opexDashboardViewModel.initialize(defaultProjectId)
-        ergoViewModel.initialize(defaultProjectId)
-        aiCopilotViewModel.initialize(defaultProjectId)
-        vsmViewModel.initialize(defaultProjectId)
-        spaghettiViewModel.initialize(defaultProjectId)
-        motionViewModel.initialize(defaultProjectId, "WE-001") 
-        multiModelViewModel.initialize(defaultProjectId)
-        whatIfViewModel.initialize(defaultProjectId)
-        savingsViewModel.initialize(defaultProjectId)
-        capacityViewModel.initialize(defaultProjectId)
-        standardWorkViewModel.initialize(defaultProjectId)
-        manualTimeStudyViewModel.initialize("VS-001")
-        simulationViewModel.initialize(defaultProjectId)
-        enterpriseViewModel.initialize()
-        
-        // Seed data if database is empty
-        repository.seedSampleData()
-    }
-
     val currentProject by projectViewModel.currentProject.collectAsState()
     val projects by projectViewModel.projects.collectAsState()
+    
+    // Initialize ViewModels
+    LaunchedEffect(currentProject?.id) {
+        currentProject?.id?.let { pid ->
+            timeStudyViewModel.initialize(pid)
+            videoStudyViewModel.initialize(pid)
+            yamazumiViewModel.initialize(pid)
+            workBalanceViewModel.initialize(pid)
+            oeeViewModel.initialize(pid)
+            kaizenViewModel.initialize(pid)
+            rcaViewModel.initialize(pid)
+            opexDashboardViewModel.initialize(pid)
+            ergoViewModel.initialize(pid)
+            aiCopilotViewModel.initialize(pid)
+            vsmViewModel.initialize(pid)
+            spaghettiViewModel.initialize(pid)
+            motionViewModel.initialize(pid, "") 
+            multiModelViewModel.initialize(pid)
+            whatIfViewModel.initialize(pid)
+            savingsViewModel.initialize(pid)
+            capacityViewModel.initialize(pid)
+            standardWorkViewModel.initialize(pid)
+            dashboardViewModel.initialize(pid)
+            simulationViewModel.initialize(pid)
+        }
+        enterpriseViewModel.initialize()
+    }
     val snackbarHostState = remember { SnackbarHostState() }
     
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -262,7 +260,7 @@ fun AppShell() {
                                             )
                                             Spacer(Modifier.width(8.dp))
                                             Text(
-                                                text = currentProject.name,
+                                                text = currentProject?.name ?: "Select Project",
                                                 fontWeight = FontWeight.SemiBold,
                                                 style = MaterialTheme.typography.titleSmall,
                                                 color = StitchWhite
@@ -290,6 +288,22 @@ fun AppShell() {
                                                 }
                                             )
                                         }
+                                        if (projects.isNotEmpty()) {
+                                            HorizontalDivider()
+                                        }
+                                        DropdownMenuItem(
+                                            text = { 
+                                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Text("Manage Projects", style = MaterialTheme.typography.bodyMedium)
+                                                }
+                                            },
+                                            onClick = {
+                                                navController.navigate(Screen.Projects.route)
+                                                projectDropdownExpanded = false
+                                            }
+                                        )
                                     }
                                 }
 
@@ -401,9 +415,15 @@ fun AppShell() {
                 modifier = Modifier.padding(innerPadding)
             ) {
                 composable(Screen.Dashboard.route) { 
-                    DashboardScreen(onNavigateToMultiModel = { navController.navigate(Screen.MultiModel.route) }) 
+                    DashboardScreen(
+                        viewModel = dashboardViewModel,
+                        onNavigateToMultiModel = { navController.navigate(Screen.MultiModel.route) },
+                        onNavigateToProjects = { navController.navigate(Screen.Projects.route) }
+                    ) 
                 }
-                composable(Screen.Projects.route) { PlaceholderScreen(Screen.Projects) }
+                composable(Screen.Projects.route) { 
+                    ProjectsScreen(viewModel = projectViewModel)
+                }
                 composable(Screen.TimeStudy.route) { TimeStudyScreen(timeStudyViewModel) }
                 composable(Screen.VideoStudy.route) { VideoStudyScreen(videoStudyViewModel) }
                 composable(Screen.ManualStudy.route) { 
@@ -414,7 +434,7 @@ fun AppShell() {
                 composable(Screen.LineBalance.route) { PlaceholderScreen(Screen.LineBalance) }
                 composable(Screen.WhatIf.route) { WhatIfScreen(whatIfViewModel) }
                 composable(Screen.Simulation.route) { 
-                    SimulationScreen(simulationViewModel, currentProject.id) 
+                    SimulationScreen(simulationViewModel, currentProject?.id ?: "") 
                 }
                 composable(Screen.Vsm.route) { VsmScreen(vsmViewModel) }
                 composable(Screen.Motion.route) { MotionScreen(motionViewModel) }
@@ -429,10 +449,10 @@ fun AppShell() {
                 }
                 composable(Screen.MultiModel.route) { MultiModelScreen(multiModelViewModel) }
                 composable(Screen.Oee.route) { 
-                    OeeScreen(oeeViewModel, currentProject.id) 
+                    OeeScreen(oeeViewModel, currentProject?.id ?: "") 
                 }
                 composable(Screen.Kaizen.route) { 
-                    KaizenScreen(kaizenViewModel, currentProject.id) 
+                    KaizenScreen(kaizenViewModel, currentProject?.id ?: "") 
                 }
                 composable(Screen.StandardWork.route) { 
                     StandardWorkScreen(
@@ -442,7 +462,7 @@ fun AppShell() {
                     ) 
                 }
                 composable(Screen.Ergonomics.route) { 
-                    ErgoScreen(ergoViewModel, currentProject.id)
+                    ErgoScreen(ergoViewModel, currentProject?.id ?: "")
                 }
                 composable(Screen.Savings.route) { 
                     SavingsScreen(savingsViewModel) 
@@ -450,7 +470,7 @@ fun AppShell() {
                 composable(Screen.AiCopilot.route) { 
                     AiCopilotScreen(
                         viewModel = aiCopilotViewModel,
-                        projectId = currentProject.id
+                        projectId = currentProject?.id ?: ""
                     ) 
                 }
                 composable(Screen.Enterprise.route) { 
@@ -459,7 +479,7 @@ fun AppShell() {
                 composable(Screen.Reports.route) { 
                     OpExDashboardScreen(
                         viewModel = opexDashboardViewModel,
-                        projectId = currentProject.id,
+                        projectId = currentProject?.id ?: "",
                         onNavigateToOee = { navController.navigate(Screen.Oee.route) },
                         onNavigateToKaizen = { navController.navigate(Screen.Kaizen.route) },
                         onNavigateToRca = { navController.navigate(Screen.Kaizen.route) } // RCA is in Kaizen/Loss flow
@@ -477,7 +497,63 @@ fun AppShell() {
 }
 
 @Composable
-fun DashboardScreen(onNavigateToMultiModel: () -> Unit = {}) {
+fun DashboardScreen(
+    viewModel: DashboardViewModel,
+    onNavigateToMultiModel: () -> Unit = {},
+    onNavigateToProjects: () -> Unit = {}
+) {
+    val uiState by viewModel.uiState.collectAsState()
+
+    if (uiState.isLoading) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = StitchCobalt600)
+        }
+        return
+    }
+
+    if (uiState.activeModelsCount == 0 && uiState.weightedCt == 0.0) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.PrecisionManufacturing,
+                    contentDescription = null,
+                    tint = StitchSlate300,
+                    modifier = Modifier.size(80.dp)
+                )
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    "Welcome to IE Copilot",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = StitchSlate900
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Configure your first manufacturing project to start optimizing your production lines.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = StitchSlate500,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(32.dp))
+                Button(
+                    onClick = onNavigateToProjects,
+                    colors = ButtonDefaults.buttonColors(containerColor = StitchCobalt600),
+                    shape = IeRadius.buttonShape,
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Create Your First Project")
+                }
+            }
+        }
+        return
+    }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
@@ -533,11 +609,11 @@ fun DashboardScreen(onNavigateToMultiModel: () -> Unit = {}) {
                                     color = StitchSlate900
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                IeBadge("3 Models Active", variant = IeBadgeVariant.PRIMARY)
+                                IeBadge("${uiState.activeModelsCount} Models Active", variant = IeBadgeVariant.PRIMARY)
                             }
                             Spacer(Modifier.height(2.dp))
                             Text(
-                                "Delta Standard (50%) • Delta Sport (30%) • Delta Pro (20%)",
+                                uiState.modelMixSummary,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = StitchSlate500
                             )
@@ -562,29 +638,29 @@ fun DashboardScreen(onNavigateToMultiModel: () -> Unit = {}) {
                     ) {
                         IeKpiCard(
                             title = "Line Takt",
-                            value = "27.0s",
-                            subtitle = "1000 units/shift",
+                            value = String.format(java.util.Locale.US, "%.1fs", uiState.lineTakt),
+                            subtitle = "${(3600 * 8 / uiState.lineTakt).toInt()} units/shift",
                             modifier = Modifier.weight(1f)
                         )
                         IeKpiCard(
                             title = "Weighted BE",
-                            value = "88.6%",
-                            isPositiveTrend = true,
-                            trend = "Loss: 11.4%",
+                            value = String.format(java.util.Locale.US, "%.1f%%", uiState.weightedBe),
+                            isPositiveTrend = uiState.weightedBe > 85,
+                            trend = "Loss: ${String.format(java.util.Locale.US, "%.1f%%", 100 - uiState.weightedBe)}",
                             modifier = Modifier.weight(1f)
                         )
                         IeKpiCard(
                             title = "Weighted CT",
-                            value = "23.9s",
+                            value = String.format(java.util.Locale.US, "%.1fs", uiState.weightedCt),
                             unit = "sec",
                             modifier = Modifier.weight(1f)
                         )
                         IeKpiCard(
                             title = "Peak CT",
-                            value = "31.0s",
+                            value = String.format(java.util.Locale.US, "%.1fs", uiState.peakCt),
                             unit = "sec",
-                            subtitle = "Delta Pro @ ST-05",
-                            isAlert = true,
+                            subtitle = "Station: ${uiState.peakCtStation}",
+                            isAlert = uiState.peakCt > uiState.lineTakt,
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -599,28 +675,25 @@ fun DashboardScreen(onNavigateToMultiModel: () -> Unit = {}) {
             ) {
                 IeKpiCard(
                     title = "OEE Overall",
-                    value = "85.4%",
-                    trend = "+2.1%",
-                    isPositiveTrend = true,
+                    value = String.format(java.util.Locale.US, "%.1f%%", uiState.oeeOverall),
+                    isPositiveTrend = uiState.oeeOverall >= 85,
                     subtitle = "Target: 85.0%",
                     modifier = Modifier.weight(1f)
                 )
                 IeKpiCard(
                     title = "Max Cycle Time",
-                    value = "54.2s",
+                    value = String.format(java.util.Locale.US, "%.1fs", uiState.maxCycleTime),
                     unit = "sec",
-                    trend = "-1.8s",
-                    isPositiveTrend = true,
-                    subtitle = "Takt: 60.0s",
+                    isPositiveTrend = uiState.maxCycleTime <= uiState.lineTakt,
+                    subtitle = "Takt: ${uiState.lineTakt}s",
                     modifier = Modifier.weight(1f)
                 )
                 IeKpiCard(
                     title = "Daily Output",
-                    value = "1,204",
+                    value = String.format(java.util.Locale.US, "%,d", uiState.dailyOutput),
                     unit = "units",
-                    trend = "+42",
-                    isPositiveTrend = true,
-                    subtitle = "Plan: 1,180",
+                    isPositiveTrend = uiState.dailyOutput >= uiState.dailyPlan,
+                    subtitle = "Plan: ${uiState.dailyPlan}",
                     modifier = Modifier.weight(1f)
                 )
             }
@@ -629,8 +702,8 @@ fun DashboardScreen(onNavigateToMultiModel: () -> Unit = {}) {
         item {
             IeChartContainer(
                 title = "Line Production & Cycle Performance",
-                subtitle = "Station Cycle Time vs. Takt Time (60.0s)",
-                taktTime = 60.0,
+                subtitle = "Station Cycle Time vs. Takt Time (${uiState.lineTakt}s)",
+                taktTime = uiState.lineTakt,
                 legendContent = {
                     IeLegendItem("VA (Value-Added)", IeLeanTokens.vaColor)
                     IeLegendItem("NNVA (Necessary)", IeLeanTokens.nnvaColor)
@@ -645,7 +718,7 @@ fun DashboardScreen(onNavigateToMultiModel: () -> Unit = {}) {
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        "Live Production Stream Monitoring Active • 12 Stations Online",
+                        if (uiState.stationStatuses.isEmpty()) "No production data available" else "Live Production Stream Monitoring Active • ${uiState.stationStatuses.size} Stations Online",
                         style = MaterialTheme.typography.bodyMedium,
                         color = StitchSlate500
                     )
@@ -658,17 +731,28 @@ fun DashboardScreen(onNavigateToMultiModel: () -> Unit = {}) {
                 title = "Station Status & Operator Assignments",
                 subtitle = "Real-time balancing tracking"
             )
-            IeTable(
-                headers = listOf("Station", "Operator", "Cycle Time", "Takt Delta", "Status"),
-                rows = listOf(
-                    listOf("ST-01 Sub-assembly", "John D.", "52.4s", "-7.6s", "BALANCED"),
-                    listOf("ST-02 Welding Rig", "Jane S.", "58.1s", "-1.9s", "NEAR TAKT"),
-                    listOf("ST-03 Main Fasten", "Mike T.", "63.2s", "+3.2s", "OVER TAKT"),
-                    listOf("ST-04 QC Inspection", "Sarah K.", "48.0s", "-12.0s", "BALANCED")
-                ),
-                columnWidths = listOf(140.dp, 100.dp, 80.dp, 80.dp, 100.dp),
-                isNumericColumn = listOf(false, false, true, true, false)
-            )
+            if (uiState.stationStatuses.isEmpty()) {
+                IeEmptyState(
+                    title = "No Station Data",
+                    message = "Configure stations and processes in the Projects module to see live status tracking.",
+                    icon = Icons.Default.Inventory
+                )
+            } else {
+                IeTable(
+                    headers = listOf("Station", "Operator", "Cycle Time", "Takt Delta", "Status"),
+                    rows = uiState.stationStatuses.map { row ->
+                        listOf(
+                            row.stationName,
+                            row.operatorName,
+                            String.format(java.util.Locale.US, "%.1fs", row.cycleTime),
+                            String.format(java.util.Locale.US, "%+.1fs", row.taktDelta),
+                            row.status
+                        )
+                    },
+                    columnWidths = listOf(140.dp, 100.dp, 80.dp, 80.dp, 100.dp),
+                    isNumericColumn = listOf(false, false, true, true, false)
+                )
+            }
         }
     }
 }

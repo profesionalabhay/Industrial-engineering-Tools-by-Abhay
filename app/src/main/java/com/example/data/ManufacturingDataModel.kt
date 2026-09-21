@@ -168,9 +168,27 @@ data class VSMProcess(@PrimaryKey val id: String, val projectId: String, val nam
 @Serializable
 data class LayoutObject(@PrimaryKey val id: String, val projectId: String, val type: String, val x: Double, val y: Double, val width: Double, val height: Double)
 
+@Serializable
+enum class MotionCategory(val isValueAdding: Boolean) {
+    REACH(false),
+    GRASP(false),
+    MOVE(false),
+    POSITION(false),
+    ASSEMBLE(true),
+    USE(true),
+    DISASSEMBLE(true),
+    INSPECT(false),
+    PRE_POSITION(false),
+    RELEASE(false),
+    UNAVOIDABLE_DELAY(false),
+    AVOIDABLE_DELAY(false),
+    PLAN(false),
+    REST(false)
+}
+
 @Entity(tableName = "motion_events")
 @Serializable
-data class MotionEvent(@PrimaryKey val id: String, val workElementId: String, val therblig: String, val timeMs: Long)
+data class MotionEvent(@PrimaryKey val id: String, val workElementId: String, val therblig: String, val timeMs: Long, val description: String = "")
 
 @Entity(tableName = "capacity_plans")
 @Serializable
@@ -810,6 +828,13 @@ data class ImprovementBenefit(
     val unit: String,
     val source: DataSourceLabel = DataSourceLabel.CALCULATED,
     val description: String = ""
+)
+
+@Serializable
+data class CycleTimeMetric(
+    val stationName: String,
+    val planned: Double,
+    val actual: Double
 )
 
 @Serializable

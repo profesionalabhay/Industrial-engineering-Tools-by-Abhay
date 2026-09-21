@@ -171,4 +171,23 @@ class VsmViewModel(private val repository: ManufacturingRepository) : ViewModel(
             state.copy(nodes = state.nodes.map { if (it.id == selId) it.updates() else it })
         }
     }
+
+    fun deleteSelectedNode() {
+        val selId = _selectedNodeId.value ?: return
+        updateActiveScenario { state ->
+            state.copy(
+                nodes = state.nodes.filter { it.id != selId },
+                edges = state.edges.filter { it.sourceId != selId && it.targetId != selId }
+            )
+        }
+        _selectedNodeId.value = null
+    }
+
+    fun duplicateSelectedNode() {
+        val selId = _selectedNodeId.value ?: return
+        val node = scenarios.value.find { it.id == _activeScenarioId.value }?.nodes?.find { it.id == selId } ?: return
+        val newNode = node.copy(id = UUID.randomUUID().toString(), x = node.x + 40f, y = node.y + 40f)
+        updateActiveScenario { it.copy(nodes = it.nodes + newNode) }
+        _selectedNodeId.value = newNode.id
+    }
 }

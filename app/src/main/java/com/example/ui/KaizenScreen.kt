@@ -30,7 +30,7 @@ fun KaizenScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(projectId) {
-        viewModel.loadKaizens(projectId)
+        viewModel.initialize(projectId)
     }
 
     Scaffold(

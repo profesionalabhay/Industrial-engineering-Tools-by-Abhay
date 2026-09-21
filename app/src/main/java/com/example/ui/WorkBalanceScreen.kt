@@ -194,8 +194,8 @@ fun WorkBalanceScreen(viewModel: WorkBalanceViewModel, modifier: Modifier = Modi
             proposals = proposals,
             isGenerating = isGenerating,
             onGenerate = { viewModel.generateSuggestions() },
-            onApply = { proposalId ->
-                viewModel.applyProposal(proposalId)
+            onApply = { proposal ->
+                viewModel.applyProposal(proposal)
                 showSuggestDialog = false
             },
             onDismiss = { showSuggestDialog = false }
@@ -460,7 +460,7 @@ fun SuggestBalanceDialog(
     proposals: List<ProposedBalance>,
     isGenerating: Boolean,
     onGenerate: () -> Unit,
-    onApply: (String) -> Unit,
+    onApply: (ProposedBalance) -> Unit,
     onDismiss: () -> Unit
 ) {
     AlertDialog(
@@ -522,7 +522,7 @@ fun SuggestBalanceDialog(
                                             color = StitchSlate900
                                         )
                                         Button(
-                                            onClick = { onApply(proposal.id) },
+                                            onClick = { onApply(proposal) },
                                             colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
                                             shape = IeRadius.buttonShape
                                         ) {

@@ -29,7 +29,7 @@ fun RcaScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     LaunchedEffect(projectId) {
-        viewModel.loadRcas(projectId)
+        viewModel.initialize(projectId)
     }
 
     Scaffold(

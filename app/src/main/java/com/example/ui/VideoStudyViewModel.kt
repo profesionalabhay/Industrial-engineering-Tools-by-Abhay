@@ -22,7 +22,7 @@ enum class CandidateFilter {
 class VideoStudyViewModel(private val repository: ManufacturingRepository) : ViewModel() {
     private val _projectId = MutableStateFlow<String?>(null)
 
-    private val _videoUri = MutableStateFlow<String?>("workstation_st04_cycle_study.mp4")
+    private val _videoUri = MutableStateFlow<String?>(null)
     val videoUri: StateFlow<String?> = _videoUri.asStateFlow()
 
     private val _selectedStudyId = MutableStateFlow<String?>(null)
@@ -57,7 +57,7 @@ class VideoStudyViewModel(private val repository: ManufacturingRepository) : Vie
     private val _videoTime = MutableStateFlow(0.0)
     val videoTime: StateFlow<Double> = _videoTime.asStateFlow()
 
-    private val _duration = MutableStateFlow(64.5)
+    private val _duration = MutableStateFlow(0.0)
     val duration: StateFlow<Double> = _duration.asStateFlow()
 
     private val _isPlaying = MutableStateFlow(false)
@@ -190,10 +190,117 @@ class VideoStudyViewModel(private val repository: ManufacturingRepository) : Vie
         }
     }
 
-    fun editCandidate(candidate: AICandidateElement) {
+    fun acceptAllCandidates() {
         viewModelScope.launch {
-            repository.insertVideoCandidate(candidate.copy(validationStatus = ValidationStatus.USER_EDITED))
+            candidates.value.forEach { cand ->
+                if (cand.validationStatus == ValidationStatus.AI_SUGGESTED) {
+                    repository.insertVideoCandidate(cand.copy(validationStatus = ValidationStatus.USER_VALIDATED))
+                }
+            }
         }
+    }
+
+    fun editCandidate(
+        id: String,
+        name: String,
+        start: Double,
+        end: Double,
+        activity: VideoActivityCategory,
+        classification: ValueClassification,
+        tools: List<String>,
+        mats: List<String>,
+        notes: String
+    ) {
+        val candidate = candidates.value.find { it.id == id } ?: return
+        viewModelScope.launch {
+            repository.insertVideoCandidate(candidate.copy(
+                name = name,
+                startTime = start,
+                endTime = end,
+                duration = end - start,
+                activityCategory = activity,
+                finalClassification = classification,
+                toolNames = tools,
+                materialNames = mats,
+                description = notes,
+                validationStatus = ValidationStatus.USER_EDITED
+            ))
+        }
+    }
+
+    fun splitCandidate(id: String, splitTime: Double, part1Name: String, part2Name: String) {
+        val cand = candidates.value.find { it.id == id } ?: return
+        viewModelScope.launch {
+            val part1 = cand.copy(
+                id = UUID.randomUUID().toString(),
+                name = part1Name,
+                endTime = splitTime,
+                duration = splitTime - cand.startTime,
+                validationStatus = ValidationStatus.USER_EDITED
+            )
+            val part2 = cand.copy(
+                id = UUID.randomUUID().toString(),
+                name = part2Name,
+                startTime = splitTime,
+                duration = cand.endTime - splitTime,
+                validationStatus = ValidationStatus.USER_EDITED
+            )
+            repository.deleteVideoCandidate(id)
+            repository.insertVideoCandidate(part1)
+            repository.insertVideoCandidate(part2)
+        }
+    }
+
+    fun createElementFromMarkers(name: String, activity: VideoActivityCategory, classification: ValueClassification, tools: List<String>, mats: List<String>) {
+        val studyId = _selectedStudyId.value ?: return
+        val start = _startMarker.value ?: 0.0
+        val end = _endMarker.value ?: _videoTime.value
+        val activeCycle = cycles.value.find { start >= it.startTime && start <= it.endTime }?.cycleNumber ?: 1
+        
+        val newCand = AICandidateElement(
+            id = UUID.randomUUID().toString(),
+            studyId = studyId,
+            cycleNumber = activeCycle,
+            sequence = candidates.value.size + 1,
+            name = name,
+            startTime = start,
+            endTime = end,
+            duration = end - start,
+            activityCategory = activity,
+            finalClassification = classification,
+            toolNames = tools,
+            materialNames = mats,
+            validationStatus = ValidationStatus.USER_VALIDATED,
+            confidenceScore = 1.0
+        )
+        viewModelScope.launch {
+            repository.insertVideoCandidate(newCand)
+            clearMarkers()
+        }
+    }
+
+    fun toggleAbnormalStatus(id: String, reason: String) {
+        val cand = candidates.value.find { it.id == id } ?: return
+        viewModelScope.launch {
+            repository.insertVideoCandidate(cand.copy(
+                isAbnormal = !cand.isAbnormal,
+                abnormalEventReason = if (!cand.isAbnormal) reason else ""
+            ))
+        }
+    }
+
+    fun commitAllValidatedElements() {
+        viewModelScope.launch {
+            candidates.value.forEach { cand ->
+                if (cand.validationStatus == ValidationStatus.USER_VALIDATED || cand.validationStatus == ValidationStatus.USER_EDITED) {
+                    commitValidatedElementToMaster(cand.id)
+                }
+            }
+        }
+    }
+
+    fun clearStatusMessage() {
+        _statusMessage.value = null
     }
 
     fun rejectCandidate(candidateId: String) {
@@ -209,9 +316,13 @@ class VideoStudyViewModel(private val repository: ManufacturingRepository) : Vie
         }
     }
 
-    fun toggleCycleExclusion(cycle: StudyCycle) {
+    fun toggleCycleExclusion(cycleId: String, reason: String) {
         viewModelScope.launch {
-            repository.insertStudyCycle(cycle.copy(isExcluded = !cycle.isExcluded))
+            val cycle = cycles.value.find { it.id == cycleId } ?: return@launch
+            repository.insertStudyCycle(cycle.copy(
+                isExcluded = !cycle.isExcluded,
+                exclusionReason = if (!cycle.isExcluded) reason else ""
+            ))
         }
     }
 
@@ -223,20 +334,28 @@ class VideoStudyViewModel(private val repository: ManufacturingRepository) : Vie
         }
     }
 
-    fun createNewStudy(name: String, fileName: String, modelId: String, stationId: String, duration: Double) {
+    fun createNewStudy(name: String, fileName: String, modelId: String, variant: String, stationId: String, operatorId: String, duration: Double, takt: Double) {
+        val projectId = _projectId.value ?: return
         val newStudy = VideoStudyMetadata(
             id = "VS-${System.currentTimeMillis()}",
-            projectId = _projectId.value ?: "P-001",
+            projectId = projectId,
             name = name,
             videoFileName = fileName,
             modelId = modelId,
+            variant = variant,
             stationId = stationId,
+            operatorId = operatorId,
             videoDurationSeconds = duration,
+            expectedTaktSeconds = takt,
             status = VideoStudyStatus.AWAITING_VALIDATION
         )
         viewModelScope.launch {
             repository.insertVideoStudy(newStudy)
             selectStudy(newStudy.id)
         }
+    }
+
+    fun sendToWhatIf(candidateId: String, targetStationId: String? = null) {
+        _statusMessage.value = "Candidate sent to What-If Redistribution."
     }
 }

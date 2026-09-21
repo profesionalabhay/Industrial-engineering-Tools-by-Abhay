@@ -27,13 +27,14 @@ class MotionViewModel(private val repository: ManufacturingRepository) : ViewMod
         _workElementId.value = workElementId
     }
 
-    fun addMotion(therblig: String, timeMs: Long) {
+    fun addMotion(category: MotionCategory, description: String, timeSec: Double) {
         val study = activeStudy.value ?: return
         val newEvent = MotionEvent(
             id = UUID.randomUUID().toString(),
             workElementId = study.workElementId,
-            therblig = therblig,
-            timeMs = timeMs
+            therblig = category.name,
+            timeMs = (timeSec * 1000).toLong(),
+            description = description
         )
         viewModelScope.launch {
             repository.insertMotionStudy(study.copy(events = study.events + newEvent))
@@ -53,12 +54,12 @@ class MotionViewModel(private val repository: ManufacturingRepository) : ViewMod
             delay(2000) // Simulate Gemini Video Analysis
             
             val suggestions = listOf(
-                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "REACH", timeMs = 1200),
-                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "GRASP", timeMs = 500),
-                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "MOVE", timeMs = 800),
-                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "POSITION", timeMs = 1500),
-                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "ASSEMBLE", timeMs = 4200),
-                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = "RELEASE", timeMs = 1000)
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = MotionCategory.REACH.name, timeMs = 1200, description = "Reach for screw"),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = MotionCategory.GRASP.name, timeMs = 500, description = "Grasp screw"),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = MotionCategory.MOVE.name, timeMs = 800, description = "Move to assembly"),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = MotionCategory.POSITION.name, timeMs = 1500, description = "Position screw"),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = MotionCategory.ASSEMBLE.name, timeMs = 4200, description = "Drive screw"),
+                MotionEvent(id = UUID.randomUUID().toString(), workElementId = _workElementId.value ?: "", therblig = MotionCategory.RELEASE.name, timeMs = 1000, description = "Release screwdriver")
             )
             _aiSuggestions.value = suggestions
             _isAnalyzingVideo.value = false

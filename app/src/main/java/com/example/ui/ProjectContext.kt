@@ -45,4 +45,34 @@ class ProjectViewModel(private val repository: ManufacturingRepository) : ViewMo
             }
         }
     }
+
+    fun createPlant(plant: Plant) {
+        viewModelScope.launch {
+            repository.insertPlant(plant)
+        }
+    }
+
+    fun createLine(line: Line) {
+        viewModelScope.launch {
+            repository.insertLine(line)
+        }
+    }
+
+    fun createStation(station: Station) {
+        viewModelScope.launch {
+            repository.insertStation(station)
+        }
+    }
+
+    fun createProcess(process: Process) {
+        viewModelScope.launch {
+            repository.insertProcess(process)
+        }
+    }
+
+    val plants: StateFlow<List<Plant>> = repository.getAllPlants()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val lines: StateFlow<List<Line>> = repository.getAllLines()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 }

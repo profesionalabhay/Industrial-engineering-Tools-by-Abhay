@@ -18,15 +18,16 @@ class ErgoViewModel(private val repository: ManufacturingRepository) : ViewModel
     private val _uiState = MutableStateFlow(ErgoUiState())
     val uiState: StateFlow<ErgoUiState> = _uiState.asStateFlow()
 
-    fun loadAssessments(projectId: String) {
+    fun initialize(projectId: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
-            val all = repository.getErgoAssessments(projectId)
-            _uiState.value = _uiState.value.copy(
-                assessments = all,
-                selectedAssessment = all.firstOrNull(),
-                isLoading = false
-            )
+            repository.getErgoAssessments(projectId).collect { all ->
+                _uiState.value = _uiState.value.copy(
+                    assessments = all,
+                    selectedAssessment = all.firstOrNull(),
+                    isLoading = false
+                )
+            }
         }
     }
     

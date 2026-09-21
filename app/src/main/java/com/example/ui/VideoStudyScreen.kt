@@ -1,5 +1,8 @@
 package com.example.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -61,6 +64,71 @@ fun VideoStudyScreen(viewModel: VideoStudyViewModel, modifier: Modifier = Modifi
     var candidateToSplit by remember { mutableStateOf<AICandidateElement?>(null) }
     var showCreateMarkerDialog by remember { mutableStateOf(false) }
     var showNewStudyDialog by remember { mutableStateOf(false) }
+
+    val videoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            if (uri != null) {
+                // If we got a URI, we could automatically open the new study dialog
+                // or just store it. For now, we'll let the user click "New Study" 
+                // and then pick, OR pick and then show dialog.
+                // Let's stick to the current flow: Click New Study -> Dialog -> Pick File in Dialog.
+            }
+        }
+    )
+
+    if (studies.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier.padding(32.dp)
+            ) {
+                Icon(
+                    Icons.Default.Videocam,
+                    contentDescription = null,
+                    tint = StitchSlate200,
+                    modifier = Modifier.size(100.dp)
+                )
+                Spacer(Modifier.height(24.dp))
+                Text(
+                    "No Video Studies Found",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = StitchSlate900
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Upload or record a video of an assembly process to perform sub-second motion analysis and cycle normalisation.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = StitchSlate500,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                )
+                Spacer(Modifier.height(32.dp))
+                Button(
+                    onClick = { showNewStudyDialog = true },
+                    colors = ButtonDefaults.buttonColors(containerColor = StitchCobalt600),
+                    shape = IeRadius.buttonShape,
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Create Your First Study")
+                }
+            }
+        }
+        
+        if (showNewStudyDialog) {
+            CreateNewStudyDialog(
+                onDismiss = { showNewStudyDialog = false },
+                onCreate = { name, uri, mid, vr, sid, oid, dur, tkt ->
+                    viewModel.createNewStudy(name, uri, mid, vr, sid, oid, dur, tkt)
+                    showNewStudyDialog = false
+                }
+            )
+        }
+        return
+    }
 
     Column(
         modifier = modifier
@@ -1598,14 +1666,36 @@ private fun CreateNewStudyDialog(
     onDismiss: () -> Unit,
     onCreate: (String, String, String, String, String, String, Double, Double) -> Unit
 ) {
-    var name by remember { mutableStateOf("Station 04 Fastening Video Study") }
-    var file by remember { mutableStateOf("workstation_st04_capture.mp4") }
-    var modelId by remember { mutableStateOf("MDL-1") }
-    var variant by remember { mutableStateOf("Standard") }
-    var stationId by remember { mutableStateOf("ST-04") }
-    var operatorId by remember { mutableStateOf("OP-1") }
-    var duration by remember { mutableStateOf("60.0") }
-    var takt by remember { mutableStateOf("27.0") }
+    var name by remember { mutableStateOf("New Video Study") }
+    var fileUri by remember { mutableStateOf("") }
+    var modelId by remember { mutableStateOf("") }
+    var variant by remember { mutableStateOf("") }
+    var stationId by remember { mutableStateOf("") }
+    var operatorId by remember { mutableStateOf("") }
+    var duration by remember { mutableStateOf("0.0") }
+    var takt by remember { mutableStateOf("0.0") }
+
+    val pickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri ->
+            if (uri != null) {
+                fileUri = uri.toString()
+            }
+        }
+    )
+
+    val captureLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CaptureVideo(),
+        onResult = { success ->
+            // In a real app, the URI would be provided to CaptureVideo
+            // For simplicity in this intent-based contract, success means the video was saved
+            // usually you pass a URI to CaptureVideo(uri)
+        }
+    )
+
+    // Helper for capturing video needs a URI
+    // For this environment, we will focus on the picker as recording requires complex file provider setup
+    // But I will add the UI affordance.
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -1613,7 +1703,44 @@ private fun CreateNewStudyDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Study Name") }, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(value = file, onValueChange = { file = it }, label = { Text("Video File / Stream") }, modifier = Modifier.fillMaxWidth())
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = fileUri,
+                        onValueChange = { fileUri = it },
+                        label = { Text("Selected Video") },
+                        modifier = Modifier.weight(1f),
+                        readOnly = true,
+                        placeholder = { Text("No video selected") }
+                    )
+                    OutlinedButton(
+                        onClick = { 
+                            pickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.VideoOnly))
+                        },
+                        shape = IeRadius.buttonShape,
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Pick", style = MaterialTheme.typography.labelSmall)
+                    }
+                    OutlinedButton(
+                        onClick = { 
+                            // Note: Real recording needs a FileProvider URI
+                        },
+                        shape = IeRadius.buttonShape,
+                        contentPadding = PaddingValues(horizontal = 8.dp)
+                    ) {
+                        Icon(Icons.Default.Videocam, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Record", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(value = modelId, onValueChange = { modelId = it }, label = { Text("Model ID") }, modifier = Modifier.weight(1f))
                     OutlinedTextField(value = variant, onValueChange = { variant = it }, label = { Text("Variant") }, modifier = Modifier.weight(1f))
@@ -1631,11 +1758,12 @@ private fun CreateNewStudyDialog(
         confirmButton = {
             Button(
                 onClick = {
-                    val d = duration.toDoubleOrNull() ?: 60.0
-                    val t = takt.toDoubleOrNull() ?: 27.0
-                    onCreate(name, file, modelId, variant, stationId, operatorId, d, t)
+                    val d = duration.toDoubleOrNull() ?: 0.0
+                    val t = takt.toDoubleOrNull() ?: 0.0
+                    onCreate(name, fileUri, modelId, variant, stationId, operatorId, d, t)
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900)
+                colors = ButtonDefaults.buttonColors(containerColor = StitchSlate900),
+                enabled = fileUri.isNotEmpty() && name.isNotEmpty()
             ) {
                 Text("Create Study")
             }
